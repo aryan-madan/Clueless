@@ -4,10 +4,11 @@ import { Nav } from './components/nav';
 import { List } from './pages/list';
 import { Scan } from './pages/scan';
 import { Saved } from './pages/saved';
-import { read, del } from './store';
+import { read, del, write } from './store';
 import { Item } from './types';
 import { Device } from '@capacitor/device';   
 import { TabsBar } from 'stay-liquid';
+import { fix, base } from './utils/clean';
 
 export default function App() {
   const [tab, setTab] = useState('wardrobe');
@@ -48,17 +49,56 @@ export default function App() {
     }
   };
 
-  const handleScanDone = () => {
-    load();
-    setTimeout(() => {
-      setScanFile(null);
-    }, 600);
+  const handleScanSave = async () => {
+    if (!scanFile) return;
+    const file = scanFile;
+    
+    // Close Scan UI immediately
+    setScanFile(null);
+
+    // Generate ID and Prep Optimistic Item
+    const id = crypto.randomUUID();
+    const tempUrl = URL.createObjectURL(file);
+    const tempItem: Item = {
+      id,
+      src: tempUrl,
+      at: Date.now(),
+      color: '#f4f4f5'
+    };
+
+    // Optimistic Update: Show raw item immediately
+    list(prev => [tempItem, ...prev]);
+
+    // Background Processing
+    try {
+      // 1. Convert Raw to Base64 & Persist
+      // We do this first so the data is saved even if bg removal fails
+      const rawBase64 = await base(file);
+      const rawItem = { ...tempItem, src: rawBase64 };
+      await write(rawItem);
+
+      // 2. Run AI Background Removal
+      const { blob, color } = await fix(file);
+      const cleanBase64 = await base(blob);
+
+      // 3. Update Item with Clean Image & Color
+      const finalItem = { ...rawItem, src: cleanBase64, color };
+      await write(finalItem);
+
+      // 4. Update UI with Clean Image
+      list(prev => prev.map(item => item.id === id ? finalItem : item));
+
+      // Cleanup
+      URL.revokeObjectURL(tempUrl);
+
+    } catch (error) {
+      console.error("Processing failed", error);
+      // Even if processing fails, we saved the raw item, so we just keep that.
+    }
   };
 
   const handleScanDiscard = () => {
-    setTimeout(() => {
-      setScanFile(null);
-    }, 600);
+    setScanFile(null);
   };
 
   useEffect(() => {
@@ -110,8 +150,8 @@ export default function App() {
           <Scan 
             key={scanKey} 
             file={scanFile}
-            resetFile={handleScanDiscard}
-            done={handleScanDone} 
+            onDiscard={handleScanDiscard}
+            onSave={handleScanSave}
           />
         )}
       </main>

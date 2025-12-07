@@ -1,7 +1,8 @@
+
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.clueless.app',
+  appId: 'com.aryan.clueless',
   appName: 'Clueless',
   webDir: 'dist',
   server: {
@@ -9,7 +10,6 @@ const config: CapacitorConfig = {
   },
   plugins: {
     TabsBar: {
-      // plugin specific config if needed in future
     }
   }
 };

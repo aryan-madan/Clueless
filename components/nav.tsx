@@ -1,26 +1,62 @@
+
 import React from 'react';
-import { Grid2X2, Plus } from 'lucide-react';
+import { LayoutGrid, Plus, Bookmark } from 'lucide-react';
 import { Props } from '../types';
 
-export const Nav = ({ tab, set }: Props) => {
+interface NavProps extends Props {
+  onAdd?: () => void;
+}
+
+export const Nav = ({ tab, set, onAdd }: NavProps) => {
   return (
-    <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50 pointer-events-none">
-      <nav className="pointer-events-auto flex items-center gap-1 p-1.5 bg-white/90 backdrop-blur-2xl rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-black/5">
+    <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-safe pt-4 z-40 pointer-events-none">
+      <nav className="pointer-events-auto mb-6 flex items-center gap-1 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl rounded-full shadow-2xl border border-white/20 dark:border-white/10">
+        
         <button 
           onClick={() => set && set('wardrobe')}
-          className={`h-11 w-14 rounded-full flex items-center justify-center transition-all duration-300 ${tab === 'wardrobe' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-400 hover:text-stone-600'}`}
+          className={`
+            relative px-5 py-3 rounded-full flex items-center gap-2 transition-all duration-300 active-shrink
+            ${tab === 'wardrobe' ? 'bg-black/5 dark:bg-white/10' : 'hover:bg-black/5 dark:hover:bg-white/5'}
+          `}
         >
-          <Grid2X2 strokeWidth={1.5} size={20} />
+          <LayoutGrid 
+            strokeWidth={2} 
+            size={20} 
+            className={`transition-colors duration-300 ${tab === 'wardrobe' ? 'text-black dark:text-white' : 'text-zinc-400 dark:text-zinc-500'}`} 
+          />
+          {tab === 'wardrobe' && (
+            <span className="text-xs font-semibold text-black dark:text-white animate-fade-in">
+              Closet
+            </span>
+          )}
         </button>
-
-        <div className="w-px h-4 bg-stone-200/50 mx-1" />
 
         <button 
-          onClick={() => set && set('scan')}
-          className={`h-11 w-14 rounded-full flex items-center justify-center transition-all duration-300 ${tab === 'scan' ? 'bg-stone-900 text-white shadow-md' : 'text-stone-400 hover:text-stone-600'}`}
+          onClick={onAdd}
+          className="mx-1 p-3 rounded-full bg-black dark:bg-white text-white dark:text-black hover:scale-105 transition-transform active-shrink shadow-lg"
         >
-          <Plus strokeWidth={1.5} size={24} />
+          <Plus strokeWidth={2.5} size={22} />
         </button>
+
+        <button 
+          onClick={() => set && set('saved')}
+          className={`
+            relative px-5 py-3 rounded-full flex items-center gap-2 transition-all duration-300 active-shrink
+            ${tab === 'saved' ? 'bg-black/5 dark:bg-white/10' : 'hover:bg-black/5 dark:hover:bg-white/5'}
+          `}
+        >
+          <Bookmark 
+            strokeWidth={2} 
+            size={20} 
+            className={`transition-colors duration-300 ${tab === 'saved' ? 'text-black dark:text-white' : 'text-zinc-400 dark:text-zinc-500'}`} 
+          />
+          {tab === 'saved' && (
+            <span className="text-xs font-semibold text-black dark:text-white animate-fade-in">
+              Saved
+            </span>
+          )}
+        </button>
+
       </nav>
     </div>
   );

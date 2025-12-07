@@ -1,63 +1,105 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Nav } from './components/nav';
 import { List } from './pages/list';
 import { Scan } from './pages/scan';
-import { read } from './store';
+import { Saved } from './pages/saved';
+import { read, del } from './store';
 import { Item } from './types';
-import { Device } from '@capacitor/device';
+import { Device } from '@capacitor/device';   
 import { TabsBar } from 'stay-liquid';
 
 export default function App() {
-  const [tab, set] = useState('wardrobe');
+  const [tab, setTab] = useState('wardrobe');
   const [data, list] = useState<Item[]>([]);
   const [native, setNative] = useState(false);
+  
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanKey, setScanKey] = useState(0);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // init data
   useEffect(() => {
-    read().then(list);
+    if (tab === 'wardrobe') load();
   }, [tab]);
 
-  // sync data
   const load = async () => {
     const items = await read();
     list(items);
   };
 
-  // init native tabs
+  const handleRemove = async (id: string) => {
+    await del(id);
+    load();
+  };
+
+  const handleInputTrigger = () => {
+    if (fileInputRef.current) {
+      setTimeout(() => {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; 
+          fileInputRef.current.click();
+        }
+      }, 50);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setScanFile(file);
+      setScanKey(prev => prev + 1); 
+      setTab('add'); 
+    }
+  };
+
+  const handleScanDone = () => {
+    load();
+    setTab('wardrobe');
+    setTimeout(() => {
+      setScanFile(null);
+    }, 600);
+  };
+
+  const handleScanDiscard = () => {
+    setTab('wardrobe');
+    setTimeout(() => {
+      setScanFile(null);
+    }, 600);
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
         const info = await Device.getInfo();
-        
-        // check for ios
         if (info.platform !== 'ios') return;
 
-        // check version as per plugin docs
-        const ver = (info as any).iOSVersion || 0;
-        
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
         await TabsBar.configure({
           visible: true,
           initialId: 'wardrobe',
           items: [
-            { id: 'wardrobe', title: 'Wardrobe', systemIcon: 'square.grid.2x2' },
-            { id: 'scan', title: 'New', systemIcon: 'plus' },
+            { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
+            { id: 'add', title: 'Add', systemIcon: 'plus.circle.fill' },
+            { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
           ],
-          selectedIconColor: '#1c1917',
-          unselectedIconColor: '#a8a29e'
+          selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
+          unselectedIconColor: '#9ca3af'
         });
 
-        // if we get here, native tabs are active
         setNative(true);
 
-        // listen for native taps
-        await TabsBar.addListener('selected', ({ id }: any) => {
-          set(id);
+        await TabsBar.addListener('selected', async ({ id }: any) => {
+          if (id === 'add') {
+             handleInputTrigger();
+             return;
+          }
+          setTab(id);
           if (id === 'wardrobe') load();
         });
 
       } catch (e) {
-        // fallback to web nav if native fails
-        console.log('Native tabs not available:', e);
         setNative(false);
       }
     };
@@ -65,21 +107,35 @@ export default function App() {
     init();
   }, []);
 
-  // sync react state to native tabs
-  useEffect(() => {
-    if (native) {
-      TabsBar.select({ id: tab }).catch(() => {});
-    }
-  }, [tab, native]);
-
   return (
-    <div className="flex flex-col h-screen w-full bg-white selection:bg-stone-200">
-      <main className="flex-1 overflow-y-auto scroll-smooth no-scrollbar">
-        {tab === 'wardrobe' && <List data={data} />}
-        {tab === 'scan' && <Scan done={() => { set('wardrobe'); load(); }} />}
+    <div className="flex flex-col h-screen w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
+      <main className="flex-1 relative z-10 overflow-y-auto scroll-smooth no-scrollbar h-full">
+        {tab === 'wardrobe' && <List data={data} onRemove={handleRemove} />}
+        {tab === 'saved' && <Saved data={data} />}
+        
+        {tab === 'add' && scanFile && (
+          <Scan 
+            key={scanKey} 
+            file={scanFile}
+            resetFile={handleScanDiscard}
+            done={handleScanDone} 
+          />
+        )}
       </main>
       
-      {!native && <Nav tab={tab} set={set} />}
+      <input 
+        ref={fileInputRef}
+        type="file" 
+        accept="image/*" 
+        onChange={handleFileChange}
+        className="opacity-0 pointer-events-none absolute inset-0 -z-10 w-0 h-0"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      
+      {!native && tab !== 'add' && (
+        <Nav tab={tab} set={setTab} onAdd={handleInputTrigger} />
+      )}
     </div>
   );
 }

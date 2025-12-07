@@ -14,6 +14,7 @@ export default function App() {
   const [tab, setTab] = useState('wardrobe');
   const [data, list] = useState<Item[]>([]);
   const [native, setNative] = useState(false);
+  const [navigated, setNavigated] = useState(false);
   
   const [scanFile, setScanFile] = useState<File | null>(null);
   const [scanKey, setScanKey] = useState(0);
@@ -22,6 +23,7 @@ export default function App() {
 
   useEffect(() => {
     if (tab === 'wardrobe') load();
+    if (tab === 'saved') setNavigated(true);
   }, [tab]);
 
   const load = async () => {
@@ -53,10 +55,8 @@ export default function App() {
     if (!scanFile) return;
     const file = scanFile;
     
-    // Close Scan UI immediately
     setScanFile(null);
 
-    // Generate ID and Prep Optimistic Item
     const id = crypto.randomUUID();
     const tempUrl = URL.createObjectURL(file);
     const tempItem: Item = {
@@ -66,35 +66,28 @@ export default function App() {
       color: '#f4f4f5'
     };
 
-    // Optimistic Update: Show raw item immediately
     list(prev => [tempItem, ...prev]);
 
-    // Background Processing
-    try {
-      // 1. Convert Raw to Base64 & Persist
-      // We do this first so the data is saved even if bg removal fails
-      const rawBase64 = await base(file);
-      const rawItem = { ...tempItem, src: rawBase64 };
-      await write(rawItem);
+    setTimeout(async () => {
+      try {
+        const rawBase64 = await base(file);
+        const rawItem = { ...tempItem, src: rawBase64 };
+        await write(rawItem);
 
-      // 2. Run AI Background Removal
-      const { blob, color } = await fix(file);
-      const cleanBase64 = await base(blob);
+        const { blob, color } = await fix(file);
+        const cleanBase64 = await base(blob);
 
-      // 3. Update Item with Clean Image & Color
-      const finalItem = { ...rawItem, src: cleanBase64, color };
-      await write(finalItem);
+        const finalItem = { ...rawItem, src: cleanBase64, color };
+        await write(finalItem);
 
-      // 4. Update UI with Clean Image
-      list(prev => prev.map(item => item.id === id ? finalItem : item));
+        list(prev => prev.map(item => item.id === id ? finalItem : item));
 
-      // Cleanup
-      URL.revokeObjectURL(tempUrl);
+        URL.revokeObjectURL(tempUrl);
 
-    } catch (error) {
-      console.error("Processing failed", error);
-      // Even if processing fails, we saved the raw item, so we just keep that.
-    }
+      } catch (error) {
+        console.error("Processing failed", error);
+      }
+    }, 600);
   };
 
   const handleScanDiscard = () => {
@@ -114,7 +107,6 @@ export default function App() {
           initialId: 'wardrobe',
           items: [
             { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
-            { id: 'add', title: 'Add', systemIcon: 'plus.circle.fill' },
             { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
           ],
           selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
@@ -124,11 +116,8 @@ export default function App() {
         setNative(true);
 
         await TabsBar.addListener('selected', async ({ id }: any) => {
-          if (id === 'add') {
-             handleInputTrigger();
-             return;
-          }
           setTab(id);
+          if (id === 'saved') setNavigated(true);
           if (id === 'wardrobe') load();
         });
 
@@ -141,10 +130,23 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
+    <div className="flex flex-col h-[100dvh] w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
       <main className="flex-1 relative z-10 overflow-y-auto scroll-smooth no-scrollbar h-full">
-        {tab === 'wardrobe' && <List data={data} onRemove={handleRemove} />}
-        {tab === 'saved' && <Saved data={data} />}
+        {tab === 'wardrobe' && (
+          <List 
+            data={data} 
+            onRemove={handleRemove} 
+            onAdd={handleInputTrigger} 
+            native={native} 
+            dir={navigated ? 'down' : undefined}
+          />
+        )}
+        {tab === 'saved' && (
+          <Saved 
+            data={data} 
+            dir="up"
+          />
+        )}
         
         {scanFile && (
           <Scan 

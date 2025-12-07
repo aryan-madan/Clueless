@@ -10,6 +10,8 @@ export interface Outfit {
   id: string;
   items: string[]; 
   at: number;
+  name?: string;
+  description?: string;
 }
 
 export interface Props {
@@ -21,4 +23,6 @@ export interface Props {
   close?: () => void;
   onAdd?: () => void;
   onRemove?: (id: string) => void;
+  native?: boolean;
+  dir?: 'up' | 'down';
 }

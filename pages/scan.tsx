@@ -1,7 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { Props } from '../types';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 
 interface ScanProps extends Props {
   file: File | null;
@@ -11,8 +13,7 @@ interface ScanProps extends Props {
 
 export const Scan = ({ file, onSave, onDiscard }: ScanProps) => {
   const [img, setImg] = useState<string | null>(null);
-  const [closing, setClosing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (file) {
@@ -22,30 +23,45 @@ export const Scan = ({ file, onSave, onDiscard }: ScanProps) => {
     }
   }, [file]);
 
+  useGSAP(() => {
+    gsap.fromTo(containerRef.current,
+      { y: '100%' },
+      { y: '0%', duration: 0.5, ease: 'power3.out' }
+    );
+  }, { scope: containerRef });
+
   const handleSave = () => {
-    setSaving(true);
-    setTimeout(() => {
-      if (onSave) onSave();
-    }, 400); // Wait for exit animation
+    if (!containerRef.current) return;
+    
+    gsap.to(containerRef.current, {
+      x: '100%',
+      duration: 0.4,
+      ease: 'power3.in',
+      onComplete: () => {
+        if (onSave) onSave();
+      }
+    });
   };
 
   const handleDiscard = () => {
-    setClosing(true);
-    setTimeout(() => {
-      if (onDiscard) onDiscard();
-    }, 400); // Wait for exit animation
+    if (!containerRef.current) return;
+
+    gsap.to(containerRef.current, {
+      y: '100%',
+      duration: 0.4,
+      ease: 'power3.in',
+      onComplete: () => {
+        if (onDiscard) onDiscard();
+      }
+    });
   };
 
   if (!file) return null;
 
   return (
     <div 
-      className={`
-        fixed inset-0 z-50 bg-white dark:bg-black overflow-hidden flex flex-col
-        ${closing ? 'animate-slide-out-down' : ''}
-        ${saving ? 'animate-slide-out-right' : ''}
-        ${!closing && !saving ? 'animate-slide-up' : ''}
-      `}
+      ref={containerRef}
+      className="fixed inset-0 z-50 bg-white dark:bg-black overflow-hidden flex flex-col"
     >
       <header className="pt-16 pb-2 px-6 flex-shrink-0 z-10 bg-white/50 dark:bg-black/50 backdrop-blur-sm">
         <div className="flex items-baseline justify-between border-b border-zinc-100 dark:border-zinc-900 pb-4">

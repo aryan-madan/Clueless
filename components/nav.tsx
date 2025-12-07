@@ -9,9 +9,9 @@ interface NavProps extends Props {
 
 export const Nav = ({ tab, set, onAdd }: NavProps) => {
   return (
-    <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-safe pt-4 z-40 pointer-events-none">
-      <nav className="pointer-events-auto mb-6 flex items-center gap-1 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl rounded-full shadow-2xl border border-white/20 dark:border-white/10">
-        
+    <div className="fixed bottom-0 left-0 right-0 flex items-center justify-center gap-4 pb-safe mb-6 z-40 pointer-events-none px-6">
+      
+      <nav className="pointer-events-auto flex items-center gap-1 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl rounded-full shadow-2xl border border-white/20 dark:border-white/10">
         <button 
           onClick={() => set && set('wardrobe')}
           className={`
@@ -32,13 +32,6 @@ export const Nav = ({ tab, set, onAdd }: NavProps) => {
         </button>
 
         <button 
-          onClick={onAdd}
-          className="mx-1 p-3 rounded-full bg-black dark:bg-white text-white dark:text-black hover:scale-105 transition-transform active-shrink shadow-lg"
-        >
-          <Plus strokeWidth={2.5} size={22} />
-        </button>
-
-        <button 
           onClick={() => set && set('saved')}
           className={`
             relative px-5 py-3 rounded-full flex items-center gap-2 transition-all duration-300 active-shrink
@@ -56,8 +49,17 @@ export const Nav = ({ tab, set, onAdd }: NavProps) => {
             </span>
           )}
         </button>
-
       </nav>
+
+      <div className="pointer-events-auto">
+        <button 
+          onClick={onAdd}
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-black dark:bg-white text-white dark:text-black hover:scale-105 transition-transform active-shrink shadow-2xl border border-white/10"
+        >
+          <Plus strokeWidth={2.5} size={24} />
+        </button>
+      </div>
+
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowRight, RefreshCw, Loader2 } from 'lucide-react';
 import { fix, base } from '../utils/clean';
 import { write } from '../store';
 import { Props } from '../types';
@@ -12,69 +12,83 @@ interface ScanProps extends Props {
 
 export const Scan = ({ file, done, resetFile }: ScanProps) => {
   const [img, setImg] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(true); 
   const [closing, setClosing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [waitingForSave, setWaitingForSave] = useState(false);
+  const [processed, setProcessed] = useState(false);
+  
+  const resultRef = useRef<{ blob: Blob; color: string } | null>(null);
+  const processingRef = useRef(false);
+  const waitingRef = useRef(false);
 
   useEffect(() => {
     if (file) {
-      processFile(file);
+      const url = URL.createObjectURL(file);
+      setImg(url);
+      
+      const t = setTimeout(() => {
+        processFile(file);
+      }, 600);
+      
+      return () => clearTimeout(t);
     }
     return () => {
-      if (img) URL.revokeObjectURL(img);
+      if (img && !img.startsWith('blob')) URL.revokeObjectURL(img);
     };
   }, []);
 
   const processFile = async (f: File) => {
-    const url = URL.createObjectURL(f);
-    setImg(url);
-    setProcessing(true);
-    setSuccess(false);
-
-    const start = Date.now();
+    if (processingRef.current) return;
+    processingRef.current = true;
 
     try {
       const result = await fix(f);
-      const raw = await base(result.blob);
+      resultRef.current = result;
+      
       const processedUrl = URL.createObjectURL(result.blob);
+      setImg(processedUrl);
+      setProcessed(true);
       
-      const elapsed = Date.now() - start;
-      const minTime = 1500;
-      if (elapsed < minTime) {
-        await new Promise(r => setTimeout(r, minTime - elapsed));
+      if (waitingRef.current) {
+        completeSave();
       }
-      
-      setImg(processedUrl); 
-      setProcessing(false);
-      setSuccess(true);
-      
-      (window as any).tempProcessedImage = raw; 
-      (window as any).tempProcessedColor = result.color;
-
     } catch (err) {
       console.error(err);
-      setProcessing(false);
+    } finally {
+      processingRef.current = false;
     }
   };
 
-  const handleSave = async () => {
-    if (processing) return;
+  const completeSave = async () => {
+    if (!resultRef.current) return;
+    
+    setWaitingForSave(false);
+    waitingRef.current = false;
     setSaving(true);
-    const raw = (window as any).tempProcessedImage;
-    const color = (window as any).tempProcessedColor;
+    
+    const raw = await base(resultRef.current.blob);
+    const color = resultRef.current.color;
     
     setTimeout(async () => {
-      if (raw) {
-        await write({
-          id: crypto.randomUUID(),
-          src: raw,
-          color: color || '#f4f4f5',
-          at: Date.now()
-        });
-        if (done) done();
-      }
+      await write({
+        id: crypto.randomUUID(),
+        src: raw,
+        color: color || '#f4f4f5',
+        at: Date.now()
+      });
+      if (done) done();
     }, 450);
+  };
+
+  const handleSave = () => {
+    if (saving) return;
+    
+    if (!resultRef.current) {
+      setWaitingForSave(true);
+      waitingRef.current = true;
+    } else {
+      completeSave();
+    }
   };
 
   const handleRetake = () => {
@@ -107,18 +121,14 @@ export const Scan = ({ file, done, resetFile }: ScanProps) => {
       </header>
 
       <div className="flex-1 w-full min-h-0 flex flex-col items-center justify-center relative px-6 py-4">
-        <div className={`
-          relative w-full h-full max-h-[65vh] aspect-[3/4] flex items-center justify-center 
-          transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
-          ${processing ? 'rounded-none bg-transparent scale-95' : 'bg-zinc-50 dark:bg-zinc-900 rounded-[36px] scale-100'}
-        `}>
+        <div className="relative w-full h-full max-h-[65vh] aspect-[3/4] flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-[36px] overflow-hidden transition-all duration-700">
           {img && (
             <img 
+              key={processed ? 'processed' : 'raw'}
               src={img} 
               className={`
-                w-full h-full object-contain select-none transition-all duration-500
-                ${processing ? 'animate-pulse-soft opacity-80' : 'p-8'}
-                ${success ? 'animate-pop-in' : ''}
+                w-full h-full object-contain select-none p-8 transition-all duration-500
+                ${processed ? 'animate-pop-in' : ''}
               `}
               alt="preview" 
               draggable={false}
@@ -127,11 +137,10 @@ export const Scan = ({ file, done, resetFile }: ScanProps) => {
         </div>
       </div>
 
-      <div className={`
-        px-6 pb-safe mb-6 w-full z-20 flex items-center gap-4 flex-shrink-0 
-        transition-all duration-700 delay-100 ease-[cubic-bezier(0.23,1,0.32,1)]
-        ${!processing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}
-      `}>
+      <div 
+        className="px-6 w-full z-20 flex items-center gap-4 flex-shrink-0 transition-all duration-700 delay-100 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        style={{ paddingBottom: 'calc(130px + env(safe-area-inset-bottom))' }}
+      >
           <button 
             onClick={handleRetake}
             className="flex-1 h-14 rounded-full bg-zinc-100 dark:bg-zinc-900 text-black dark:text-white font-medium hover:bg-zinc-200 dark:hover:bg-zinc-800 active-shrink text-sm flex items-center justify-center gap-2 transition-colors"
@@ -141,9 +150,19 @@ export const Scan = ({ file, done, resetFile }: ScanProps) => {
           </button>
           <button 
             onClick={handleSave}
-            className="flex-1 h-14 rounded-full bg-black dark:bg-white text-white dark:text-black font-bold flex items-center justify-center gap-2 text-sm shadow-xl active-shrink transition-colors"
+            disabled={waitingForSave}
+            className="flex-1 h-14 rounded-full bg-black dark:bg-white text-white dark:text-black font-bold flex items-center justify-center gap-2 text-sm shadow-xl active-shrink transition-colors disabled:opacity-80"
           >
-            Save Item <ArrowRight size={18} />
+            {waitingForSave ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                Save Item <ArrowRight size={18} />
+              </>
+            )}
           </button>
       </div>
     </div>

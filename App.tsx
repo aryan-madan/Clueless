@@ -35,12 +35,8 @@ export default function App() {
 
   const handleInputTrigger = () => {
     if (fileInputRef.current) {
-      setTimeout(() => {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = ''; 
-          fileInputRef.current.click();
-        }
-      }, 50);
+      fileInputRef.current.value = ''; 
+      fileInputRef.current.click();
     }
   };
 
@@ -49,20 +45,17 @@ export default function App() {
     if (file) {
       setScanFile(file);
       setScanKey(prev => prev + 1); 
-      setTab('add'); 
     }
   };
 
   const handleScanDone = () => {
     load();
-    setTab('wardrobe');
     setTimeout(() => {
       setScanFile(null);
     }, 600);
   };
 
   const handleScanDiscard = () => {
-    setTab('wardrobe');
     setTimeout(() => {
       setScanFile(null);
     }, 600);
@@ -113,7 +106,7 @@ export default function App() {
         {tab === 'wardrobe' && <List data={data} onRemove={handleRemove} />}
         {tab === 'saved' && <Saved data={data} />}
         
-        {tab === 'add' && scanFile && (
+        {scanFile && (
           <Scan 
             key={scanKey} 
             file={scanFile}

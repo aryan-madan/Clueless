@@ -64,7 +64,24 @@ const optimizeColor = (r: number, g: number, b: number) => {
   return rgbToHex(nR, nG, nB);
 };
 
-export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string }> => {
+const mapCategory = (label: string): string => {
+  const map: Record<string, string> = {
+    'Upper-clothes': 'Top',
+    'Pants': 'Bottom',
+    'Skirt': 'Bottom',
+    'Dress': 'One Piece',
+    'Left-shoe': 'Shoe',
+    'Right-shoe': 'Shoe',
+    'Hat': 'Headwear',
+    'Sunglasses': 'Eyewear',
+    'Bag': 'Bag',
+    'Scarf': 'Accessory',
+    'Belt': 'Accessory'
+  };
+  return map[label] || 'Other';
+};
+
+export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string; category: string }> => {
   try {
     if (!pipe) {
       pipe = await pipeline('image-segmentation', 'Xenova/segformer_b2_clothes', {
@@ -96,20 +113,36 @@ export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string }> =>
     ];
 
     let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    
+    // Categorization Logic
+    let maxScore = 0;
+    let maxLabel = 'Other';
 
     for (const seg of output) {
       if (keep.includes(seg.label)) {
         found = true;
         const mask = seg.mask;
+        
+        // Calculate area for this specific segment to determine primary category
+        let currentArea = 0;
+
         for (let i = 0; i < combined.length; i++) {
-          if (mask.data[i] > 0) combined[i] = 255;
+          if (mask.data[i] > 0) {
+            combined[i] = 255;
+            currentArea++;
+          }
+        }
+        
+        if (currentArea > maxScore) {
+          maxScore = currentArea;
+          maxLabel = seg.label;
         }
       }
     }
 
     if (!found) {
       URL.revokeObjectURL(url);
-      return { blob, color: '#A1A1AA' };
+      return { blob, color: '#A1A1AA', category: 'Other' };
     }
 
     for (let i = 0; i < combined.length; i++) {
@@ -141,12 +174,13 @@ export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string }> =>
     
     return { 
       blob: processedBlob || blob, 
-      color: hex 
+      color: hex,
+      category: mapCategory(maxLabel)
     };
 
   } catch (e) {
     console.error('bg removal error', e);
-    return { blob, color: '#A1A1AA' };
+    return { blob, color: '#A1A1AA', category: 'Other' };
   }
 };
 

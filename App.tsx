@@ -4,15 +4,15 @@ import { Nav } from './components/nav';
 import { List } from './pages/list';
 import { Scan } from './pages/scan';
 import { Saved } from './pages/saved';
-import { read, del, write } from './store';
-import { Item } from './types';
+import { read, del, write, getOutfits, saveOutfit, deleteOutfit } from './store';
+import { Item, Outfit, ScanResult } from './types';
 import { Device } from '@capacitor/device';   
 import { TabsBar } from 'stay-liquid';
-import { fix, base } from './utils/clean';
 
 export default function App() {
   const [tab, setTab] = useState('wardrobe');
   const [data, list] = useState<Item[]>([]);
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [native, setNative] = useState(false);
   const [navigated, setNavigated] = useState(false);
   
@@ -22,17 +22,28 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (tab === 'wardrobe') load();
+    load();
     if (tab === 'saved') setNavigated(true);
   }, [tab]);
 
   const load = async () => {
-    const items = await read();
+    const [items, fits] = await Promise.all([read(), getOutfits()]);
     list(items);
+    setOutfits(fits);
   };
 
   const handleRemove = async (id: string) => {
     await del(id);
+    load();
+  };
+
+  const handleSaveOutfit = async (outfit: Outfit) => {
+    await saveOutfit(outfit);
+    load();
+  };
+
+  const handleDeleteOutfit = async (id: string) => {
+    await deleteOutfit(id);
     load();
   };
 
@@ -51,43 +62,23 @@ export default function App() {
     }
   };
 
-  const handleScanSave = async () => {
-    if (!scanFile) return;
-    const file = scanFile;
-    
+  const handleScanSave = async (result: ScanResult) => {
+    // Close Scan UI
     setScanFile(null);
 
-    const id = crypto.randomUUID();
-    const tempUrl = URL.createObjectURL(file);
-    const tempItem: Item = {
-      id,
-      src: tempUrl,
-      at: Date.now(),
-      color: '#f4f4f5'
+    const newItem: Item = {
+      id: crypto.randomUUID(),
+      src: result.src,
+      category: result.category,
+      color: result.color,
+      at: Date.now()
     };
 
-    list(prev => [tempItem, ...prev]);
+    // Optimistic Update
+    list(prev => [newItem, ...prev]);
 
-    setTimeout(async () => {
-      try {
-        const rawBase64 = await base(file);
-        const rawItem = { ...tempItem, src: rawBase64 };
-        await write(rawItem);
-
-        const { blob, color } = await fix(file);
-        const cleanBase64 = await base(blob);
-
-        const finalItem = { ...rawItem, src: cleanBase64, color };
-        await write(finalItem);
-
-        list(prev => prev.map(item => item.id === id ? finalItem : item));
-
-        URL.revokeObjectURL(tempUrl);
-
-      } catch (error) {
-        console.error("Processing failed", error);
-      }
-    }, 600);
+    // Persist
+    await write(newItem);
   };
 
   const handleScanDiscard = () => {
@@ -144,6 +135,9 @@ export default function App() {
         {tab === 'saved' && (
           <Saved 
             data={data} 
+            outfits={outfits}
+            onSaveOutfit={handleSaveOutfit}
+            onDeleteOutfit={handleDeleteOutfit}
             dir="up"
           />
         )}
@@ -153,7 +147,7 @@ export default function App() {
             key={scanKey} 
             file={scanFile}
             onDiscard={handleScanDiscard}
-            onSave={handleScanSave}
+            onScanSave={handleScanSave}
           />
         )}
       </main>

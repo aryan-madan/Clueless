@@ -119,7 +119,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
-      <main className="flex-1 relative z-10 overflow-y-auto scroll-smooth no-scrollbar h-full">
+      <main className="flex-1 relative z-10 h-full overflow-y-auto scroll-smooth no-scrollbar">
         {tab === 'wardrobe' && (
           <List 
             data={data} 
@@ -129,6 +129,7 @@ export default function App() {
             dir={navigated ? 'down' : undefined}
           />
         )}
+
         {tab === 'saved' && (
           <Saved 
             data={data} 

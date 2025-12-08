@@ -23,40 +23,84 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
   const [holding, setHolding] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  
+  const prevCount = useRef(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const headerTextRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const creatorRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
-    if (mode === 'list') {
-      gsap.killTweensOf([headerTextRef.current, contentRef.current]);
+    gsap.killTweensOf(headerTextRef.current);
 
-      if (dir === 'up') {
-        gsap.fromTo(headerTextRef.current,
-          { y: 20, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, duration: 0.4, ease: 'power2.out' }
-        );
-      } else {
-        gsap.fromTo(headerTextRef.current,
-          { autoAlpha: 0, y: 0 },
-          { autoAlpha: 1, duration: 0.4, ease: 'power2.out' }
-        );
-      }
-
-      gsap.fromTo(contentRef.current,
-        { autoAlpha: 0, scale: 0.95 },
-        { autoAlpha: 1, scale: 1, duration: 0.5, delay: 0.05, ease: 'power2.out' }
-      );
+    const fromVars: gsap.TweenVars = { autoAlpha: 0 };
+    if (dir === 'up') {
+        fromVars.y = 15;
     }
-  }, { scope: containerRef, dependencies: [mode, dir] });
+
+    gsap.from(headerTextRef.current, {
+      ...fromVars,
+      duration: 0.4, 
+      ease: 'power2.out',
+      clearProps: 'all'
+    });
+  }, { scope: containerRef, dependencies: [dir] });
+
+  useGSAP(() => {
+    if (gridRef.current && outfits.length > 0) {
+      const items = gridRef.current.children;
+      const currentCount = outfits.length;
+      const previous = prevCount.current;
+      
+      if (previous === 0 && currentCount > 0) {
+        gsap.killTweensOf(items);
+        gsap.fromTo(items,
+          { autoAlpha: 0, scale: 0.9, y: 15 },
+          { 
+            autoAlpha: 1, 
+            scale: 1, 
+            y: 0, 
+            stagger: 0.05, 
+            duration: 0.5, 
+            ease: 'back.out(1.2)',
+            delay: 0.05
+          }
+        );
+      } 
+      else if (currentCount > previous) {
+         if (items[0]) {
+             gsap.fromTo(items[0], 
+                { autoAlpha: 0, scale: 0.95 },
+                { 
+                  autoAlpha: 1, 
+                  scale: 1, 
+                  y: 0, 
+                  duration: 0.3,
+                  ease: 'power2.out'
+                }
+             );
+         }
+         for(let i=1; i<items.length; i++) {
+             gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+         }
+      }
+      else if (currentCount === previous && currentCount > 0) {
+         gsap.set(items, { autoAlpha: 1, scale: 1, y: 0 });
+      }
+      
+      prevCount.current = currentCount;
+    }
+  }, { scope: containerRef, dependencies: [outfits] });
 
   useGSAP(() => {
     if (mode === 'create' && creatorRef.current) {
-      gsap.fromTo(creatorRef.current, 
-        { y: '100%', autoAlpha: 0 },
+      gsap.set(creatorRef.current, { y: '100%', autoAlpha: 0 });
+      gsap.set('.slot-anim', { scale: 0.5, autoAlpha: 0 });
+
+      gsap.to(creatorRef.current, 
         { y: '0%', autoAlpha: 1, duration: 0.5, ease: 'expo.out' }
       );
 
@@ -66,7 +110,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
         duration: 0.5, 
         stagger: 0.08, 
         ease: 'back.out(1.2)', 
-        delay: 0.25,
+        delay: 0.2
       });
     }
   }, { scope: containerRef, dependencies: [mode] });
@@ -95,10 +139,25 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
       if (navigator.vibrate) navigator.vibrate(50);
       
       if (window.confirm('Delete outfit?')) {
-         onDeleteOutfit?.(id);
+        setDeleting(id);
+        const element = document.getElementById(`fit-wrapper-${id}`);
+        if (element) {
+          gsap.to(element, {
+             scale: 0, 
+             autoAlpha: 0, 
+             duration: 0.3,
+             onComplete: () => {
+                 onDeleteOutfit?.(id);
+                 setDeleting(null);
+             }
+          });
+        } else {
+             onDeleteOutfit?.(id);
+             setDeleting(null);
+        }
       }
       setHolding(null);
-    }, 600);
+    }, 400); 
   };
 
   const endPress = () => {
@@ -209,17 +268,22 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   };
 
   const closeCreator = () => {
-    gsap.to(creatorRef.current, {
-      y: '100%',
-      duration: 0.3,
-      ease: 'power2.in',
-      onComplete: () => {
-        setMode('list');
-        setSelections({});
-        setEditingId(null);
-        setActiveSlot(null);
-      }
-    });
+    if (creatorRef.current) {
+      gsap.to(creatorRef.current, {
+        y: '100%',
+        autoAlpha: 0,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => {
+          setMode('list');
+          setSelections({});
+          setEditingId(null);
+          setActiveSlot(null);
+        }
+      });
+    } else {
+      setMode('list');
+    }
   };
 
   const closeDrawer = () => {
@@ -249,11 +313,11 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   };
 
   return (
-    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black px-6 relative overflow-hidden">
+    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black relative overflow-hidden">
       
-      <header className="pt-16 pb-4 sticky top-0 z-20 transition-all duration-300 bg-white/75 dark:bg-black/75 backdrop-blur-xl border-b border-zinc-100/50 dark:border-zinc-800/50 supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
-        <div className="flex items-baseline justify-between pb-2">
-          <div ref={headerTextRef} className="flex items-baseline justify-between w-full opacity-0">
+      <header className="pt-16 pb-4 sticky top-0 z-20 transition-all duration-300 bg-white/80 dark:bg-black/80 backdrop-blur-2xl supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
+        <div className="px-6 flex items-baseline justify-between pb-2">
+          <div ref={headerTextRef} className="flex items-baseline justify-between w-full">
             <div className="flex items-baseline gap-3">
               <h1 className="text-3xl font-bold tracking-tight text-black dark:text-white">
                 Saved
@@ -262,83 +326,95 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                 {outfits.length} FITS
               </span>
             </div>
-            {mode === 'list' && (
-              <button 
-                onClick={() => {
-                    setSelections({});
-                    setEditingId(null);
-                    setMode('create');
-                }}
-                className="p-2 -mr-2 text-zinc-800 dark:text-white active-shrink"
-              >
-                <Plus size={24} strokeWidth={2} />
-              </button>
-            )}
+            
+            <button 
+              onClick={() => {
+                  setSelections({});
+                  setEditingId(null);
+                  setMode('create');
+              }}
+              className="p-2 -mr-2 text-zinc-800 dark:text-white active-shrink"
+            >
+              <Plus size={24} strokeWidth={2} />
+            </button>
+            
           </div>
         </div>
       </header>
 
-      {mode === 'list' && (
-        <div ref={contentRef} className="opacity-0 will-change-transform">
-          {outfits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center mt-32 gap-6">
-              <div 
-                onClick={() => setMode('create')}
-                className="w-20 h-20 rounded-full bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform active:scale-95"
-              >
-                <Plus size={32} strokeWidth={1.5} className="text-zinc-300 dark:text-zinc-700" />
-              </div>
-              <div className="text-center space-y-2">
-                <p className="text-zinc-500 dark:text-zinc-400 font-medium">No saved outfits</p>
-                <p className="text-zinc-300 dark:text-zinc-600 text-sm max-w-[200px] leading-relaxed">
-                  Tap the + to create your first fit.
-                </p>
-              </div>
+      <div className="will-change-transform">
+        {outfits.length === 0 ? (
+          <div className="px-6 flex flex-col items-center justify-center mt-32 gap-6">
+            <div 
+              onClick={() => setMode('create')}
+              className="w-20 h-20 rounded-full bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform active:scale-95"
+            >
+              <Plus size={32} strokeWidth={1.5} className="text-zinc-300 dark:text-zinc-700" />
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              {outfits.map(fit => (
+            <div className="text-center space-y-2">
+              <p className="text-zinc-500 dark:text-zinc-400 font-medium">No saved outfits</p>
+              <p className="text-zinc-300 dark:text-zinc-600 text-sm max-w-[200px] leading-relaxed">
+                Tap the + to create your first fit.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div ref={gridRef} className="px-6 grid grid-cols-2 gap-4 mt-2">
+            {outfits.map(fit => (
+              <div key={fit.id} id={`fit-wrapper-${fit.id}`} className="invisible">
                 <div 
-                  key={fit.id} 
                   className={`
-                    group relative aspect-[3/4] bg-zinc-50 dark:bg-zinc-900 rounded-[32px] overflow-hidden cursor-pointer
-                    ${holding === fit.id ? 'scale-95' : 'hover:scale-[1.02]'}
-                    transition-transform duration-300 backface-hidden
+                    group relative aspect-[3/4] bg-zinc-50 dark:bg-zinc-900 rounded-[32px] overflow-hidden cursor-pointer isolate
+                    transition-transform backface-hidden transform-gpu select-none
+                    ${holding === fit.id 
+                        ? 'scale-90 duration-200 ease-out' 
+                        : 'scale-100 hover:scale-[1.03] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]'
+                    }
                   `}
                   onMouseDown={() => startPress(fit.id)}
                   onMouseUp={() => { endPress(); handleTapFit(fit); }}
                   onMouseLeave={endPress}
                   onTouchStart={() => startPress(fit.id)}
                   onTouchEnd={() => { endPress(); handleTapFit(fit); }}
+                  onTouchMove={endPress}
                 >
-                    {holding === fit.id && (
-                        <div className="absolute inset-0 z-20 bg-gradient-to-t from-red-600/80 via-red-500/40 to-transparent transition-all duration-500 pointer-events-none" />
-                    )}
-
-                    {fit.thumbnail ? (
-                        <img src={fit.thumbnail} className="w-full h-full object-cover select-none pointer-events-none" alt="outfit" draggable={false} />
-                    ) : (
-                        <div className="grid grid-cols-2 gap-1 h-full w-full p-2 pointer-events-none">
-                            {fit.items.slice(0, 4).map(itemId => {
-                                const item = data?.find(i => i.id === itemId);
-                                if (!item) return null;
-                                return (
-                                    <img key={itemId} src={item.src} className="w-full h-full object-contain bg-white dark:bg-zinc-800 rounded-lg" alt="" />
-                                );
-                            })}
-                        </div>
-                    )}
+                    <div 
+                       className={`
+                          absolute inset-0 z-0 transition-transform duration-[400ms] ease-in pointer-events-none
+                          ${holding === fit.id ? 'translate-y-0' : 'translate-y-full'}
+                       `}
+                       style={{
+                          background: 'linear-gradient(to top, #71717aCC, transparent)' 
+                       }}
+                    />
+  
+                    <div className="relative z-10 w-full h-full pointer-events-none">
+                        {fit.thumbnail ? (
+                            <img src={fit.thumbnail} className="w-full h-full object-cover select-none" alt="outfit" draggable={false} />
+                        ) : (
+                            <div className="grid grid-cols-2 gap-1 h-full w-full p-2">
+                                {fit.items.slice(0, 4).map(itemId => {
+                                    const item = data?.find(i => i.id === itemId);
+                                    if (!item) return null;
+                                    return (
+                                        <img key={itemId} src={item.src} className="w-full h-full object-contain bg-white dark:bg-zinc-800 rounded-lg" alt="" />
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {mode === 'create' && (
         <div 
           ref={creatorRef} 
-          className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col translate-y-full invisible"
+          className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col pointer-events-none"
+          style={{ pointerEvents: 'auto' }}
         >
            <header className="pt-16 pb-2 px-6 flex-shrink-0 z-10 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-900">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center pb-4">
@@ -363,7 +439,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
             <div className="flex-1 overflow-y-auto overflow-x-hidden relative bg-zinc-50/50 dark:bg-zinc-900/30 pb-32">
               <div className="flex flex-col items-center pt-8 pb-12 w-full max-w-md mx-auto relative px-6">
 
-                <div className="z-10 slot-anim w-full flex justify-center will-change-transform opacity-0 scale-50">
+                <div className="z-10 slot-anim w-full flex justify-center will-change-transform invisible">
                   <Slot 
                      def={SLOTS[0]} 
                      selectedId={selections['headwear']} 
@@ -373,7 +449,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                   />
                 </div>
 
-                <div className="-mt-4 z-20 w-[90%] slot-anim flex justify-center will-change-transform opacity-0 scale-50">
+                <div className="-mt-4 z-20 w-[90%] slot-anim flex justify-center will-change-transform invisible">
                   <Slot 
                      def={SLOTS[1]} 
                      selectedId={selections['top']} 
@@ -384,7 +460,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                   />
                 </div>
 
-                <div className="-mt-6 z-30 w-[85%] slot-anim flex justify-center will-change-transform opacity-0 scale-50">
+                <div className="-mt-6 z-30 w-[85%] slot-anim flex justify-center will-change-transform invisible">
                   <Slot 
                      def={SLOTS[2]} 
                      selectedId={selections['bottom']} 
@@ -395,7 +471,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                   />
                 </div>
 
-                 <div className="-mt-6 z-40 w-[70%] slot-anim flex justify-center will-change-transform opacity-0 scale-50">
+                 <div className="-mt-6 z-40 w-[70%] slot-anim flex justify-center will-change-transform invisible">
                    <Slot 
                      def={SLOTS[3]} 
                      selectedId={selections['shoes']} 
@@ -405,7 +481,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                   />
                  </div>
 
-                 <div className="absolute right-4 top-[40%] z-50 slot-anim will-change-transform opacity-0 scale-50">
+                 <div className="absolute right-4 top-[40%] z-50 slot-anim will-change-transform invisible">
                     <Slot 
                         def={SLOTS[4]} 
                         selectedId={selections['accessory']} 

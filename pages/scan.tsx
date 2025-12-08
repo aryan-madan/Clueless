@@ -14,7 +14,7 @@ interface ScanProps extends Props {
 
 const CATEGORIES = ['Top', 'Bottom', 'One Piece', 'Shoe', 'Headwear', 'Accessory', 'Bag', 'Other'];
 
-export const Scan = ({ file, onScanSave, onDiscard }: ScanProps) => {
+export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard }) => {
   const [processing, setProcessing] = useState(true);
   const [result, setResult] = useState<ScanResult>({ src: '', color: '#f4f4f5', category: 'Top' });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,9 +91,11 @@ export const Scan = ({ file, onScanSave, onDiscard }: ScanProps) => {
             </div>
         </header>
 
-        {/* Combined Container for Image and Buttons to control gap */}
         <div className="flex-1 w-full flex flex-col items-center justify-center px-6 gap-4 pb-12">
-            <div className="relative w-full aspect-[4/5] max-h-[50vh] flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-[32px] overflow-hidden shadow-inner">
+            <div 
+                className="relative w-full aspect-[4/5] max-h-[50vh] flex items-center justify-center rounded-[32px] overflow-hidden shadow-inner transition-colors duration-500"
+                style={{ backgroundColor: result.color ? `${result.color}33` : 'rgba(244,244,245,0.5)' }}
+            >
                 <img 
                     src={result.src} 
                     className="w-full h-full object-contain p-8 select-none"

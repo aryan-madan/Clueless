@@ -1,10 +1,5 @@
 
-import { pipeline, env, RawImage } from '@xenova/transformers';
-
-env.allowLocalModels = false;
-env.useBrowserCache = true;
-
-let pipe: any = null;
+import { removeBackground } from '@imgly/background-removal';
 
 const rgbToHex = (r: number, g: number, b: number) => {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
@@ -50,137 +45,107 @@ const hslToRgb = (h: number, s: number, l: number) => {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 };
 
-const optimizeColor = (r: number, g: number, b: number) => {
+const optimizeColorForUI = (r: number, g: number, b: number) => {
   const [h, s, l] = rgbToHsl(r, g, b);
 
-  if (s < 0.15 || l < 0.15 || l > 0.9) {
-    return "#A1A1AA"; 
-  }
-
-  const newL = 0.6;
-  const newS = Math.max(s, 0.4); 
+  const newS = Math.max(s, 0.6);
+  
+  const newL = 0.6; 
   
   const [nR, nG, nB] = hslToRgb(h, newS, newL);
   return rgbToHex(nR, nG, nB);
 };
 
-const mapCategory = (label: string): string => {
-  const map: Record<string, string> = {
-    'Upper-clothes': 'Top',
-    'Pants': 'Bottom',
-    'Skirt': 'Bottom',
-    'Dress': 'One Piece',
-    'Left-shoe': 'Shoe',
-    'Right-shoe': 'Shoe',
-    'Hat': 'Headwear',
-    'Sunglasses': 'Eyewear',
-    'Bag': 'Bag',
-    'Scarf': 'Accessory',
-    'Belt': 'Accessory'
-  };
-  return map[label] || 'Other';
-};
-
 export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string; category: string }> => {
   try {
-    if (!pipe) {
-      pipe = await pipeline('image-segmentation', 'Xenova/segformer_b2_clothes', {
-        quantized: true,
-      });
-    }
+    const processedBlob = await removeBackground(blob, {
+       model: 'medium',
+       progress: (key, current, total) => {
+       }
+    });
 
-    const url = URL.createObjectURL(blob);
-    const img = await RawImage.fromURL(url);
-    
-    const output = await pipe(img);
-    
+    const url = URL.createObjectURL(processedBlob);
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = url;
+    });
+
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('ctx');
 
-    ctx.drawImage(img.toCanvas(), 0, 0);
+    ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, img.width, img.height);
     const pixels = data.data;
 
-    const combined = new Uint8Array(img.width * img.height);
-    let found = false;
-
-    const keep = [
-      'Upper-clothes', 'Skirt', 'Pants', 'Dress', 'Belt', 
-      'Left-shoe', 'Right-shoe', 'Bag', 'Scarf', 'Hat', 'Sunglasses'
-    ];
-
-    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+    const buckets: Record<string, { r: number, g: number, b: number, count: number }> = {};
+    const grayscale = { r:0, g:0, b:0, count:0 };
     
-    // Categorization Logic
-    let maxScore = 0;
-    let maxLabel = 'Other';
+    for (let i = 0; i < pixels.length; i += 4) {
+      const alpha = pixels[i + 3];
+      if (alpha < 128) continue;
 
-    for (const seg of output) {
-      if (keep.includes(seg.label)) {
-        found = true;
-        const mask = seg.mask;
-        
-        // Calculate area for this specific segment to determine primary category
-        let currentArea = 0;
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const [h, s, l] = rgbToHsl(r, g, b);
 
-        for (let i = 0; i < combined.length; i++) {
-          if (mask.data[i] > 0) {
-            combined[i] = 255;
-            currentArea++;
-          }
-        }
+      if (s < 0.15 || l < 0.15 || l > 0.85) {
+        grayscale.r += r;
+        grayscale.g += g;
+        grayscale.b += b;
+        grayscale.count++;
+      } else {
+        const bucketIndex = Math.floor(h * 18);
+        const key = `h-${bucketIndex}`;
         
-        if (currentArea > maxScore) {
-          maxScore = currentArea;
-          maxLabel = seg.label;
-        }
+        if (!buckets[key]) buckets[key] = { r: 0, g: 0, b: 0, count: 0 };
+        buckets[key].r += r;
+        buckets[key].g += g;
+        buckets[key].b += b;
+        buckets[key].count++;
       }
     }
 
-    if (!found) {
-      URL.revokeObjectURL(url);
-      return { blob, color: '#A1A1AA', category: 'Other' };
-    }
-
-    for (let i = 0; i < combined.length; i++) {
-      const idx = i * 4;
-      const alpha = combined[i];
-      pixels[idx + 3] = alpha;
-
-      if (alpha > 200) {
-        rSum += pixels[idx];
-        gSum += pixels[idx + 1];
-        bSum += pixels[idx + 2];
-        count++;
-      }
-    }
-
-    let hex = '#A1A1AA'; 
-    if (count > 0) {
-      const r = Math.round(rSum / count);
-      const g = Math.round(gSum / count);
-      const b = Math.round(bSum / count);
-      hex = optimizeColor(r, g, b);
-    }
-
-    ctx.putImageData(data, 0, 0);
-    
     URL.revokeObjectURL(url);
-    
-    const processedBlob = await new Promise<Blob | null>(r => canvas.toBlob(b => r(b), 'image/png'));
-    
+
+    let maxCount = 0;
+    let dominantColor = null;
+
+    for (const key in buckets) {
+      if (buckets[key].count > maxCount) {
+        maxCount = buckets[key].count;
+        dominantColor = buckets[key];
+      }
+    }
+
+    let finalHex = '#71717a'; 
+
+    const totalColored = Object.values(buckets).reduce((acc, v) => acc + v.count, 0);
+    const totalOpaque = totalColored + grayscale.count;
+
+    if (dominantColor && (dominantColor.count > totalOpaque * 0.05)) {
+        const avgR = Math.round(dominantColor.r / dominantColor.count);
+        const avgG = Math.round(dominantColor.g / dominantColor.count);
+        const avgB = Math.round(dominantColor.b / dominantColor.count);
+        finalHex = optimizeColorForUI(avgR, avgG, avgB);
+    } else {
+        finalHex = '#71717a';
+    }
+
     return { 
-      blob: processedBlob || blob, 
-      color: hex,
-      category: mapCategory(maxLabel)
+      blob: processedBlob, 
+      color: finalHex,
+      category: 'Top' 
     };
 
   } catch (e) {
     console.error('bg removal error', e);
-    return { blob, color: '#A1A1AA', category: 'Other' };
+    return { blob, color: '#71717a', category: 'Other' };
   }
 };
 

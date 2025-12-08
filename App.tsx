@@ -63,7 +63,6 @@ export default function App() {
   };
 
   const handleScanSave = async (result: ScanResult) => {
-    // Close Scan UI
     setScanFile(null);
 
     const newItem: Item = {
@@ -74,10 +73,8 @@ export default function App() {
       at: Date.now()
     };
 
-    // Optimistic Update
     list(prev => [newItem, ...prev]);
 
-    // Persist
     await write(newItem);
   };
 

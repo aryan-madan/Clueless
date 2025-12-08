@@ -10,9 +10,8 @@ export interface Item {
 export interface Outfit {
   id: string;
   items: string[]; 
+  thumbnail?: string;
   at: number;
-  name?: string;
-  description?: string;
 }
 
 export interface ScanResult {

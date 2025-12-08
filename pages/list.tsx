@@ -15,7 +15,9 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
   const headerTextRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
+  // Animate Header
   useGSAP(() => {
+    // Kill any existing animations on these elements to prevent conflicts
     gsap.killTweensOf(headerTextRef.current);
     
     if (dir === 'down') {
@@ -31,12 +33,14 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
     }
   }, { scope: containerRef, dependencies: [dir] });
 
+  // Animate Grid Items Stagger
   useGSAP(() => {
     if (data && data.length > 0) {
       const items = gridRef.current?.children;
       if (items) {
         gsap.killTweensOf(items);
         
+        // Reset state for animation
         setIntro(false);
 
         gsap.fromTo(items,
@@ -89,8 +93,8 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
 
   return (
     <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black px-6">
-      <header className="pt-16 pb-8 sticky top-0 bg-white/90 dark:bg-black/90 backdrop-blur-xl z-20">
-        <div className="flex items-baseline justify-between border-b border-zinc-100 dark:border-zinc-900 pb-4">
+      <header className="pt-16 pb-4 sticky top-0 z-20 transition-all duration-300 bg-white/75 dark:bg-black/75 backdrop-blur-xl border-b border-zinc-100/50 dark:border-zinc-800/50 supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
+        <div className="flex items-baseline justify-between pb-2">
           <div ref={headerTextRef} className="flex items-baseline gap-3 opacity-0">
             <h1 className="text-3xl font-bold tracking-tight text-black dark:text-white">
               Closet
@@ -110,7 +114,7 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
           )}
         </div>
       </header>
-
+      
       {!data || data.length === 0 ? (
         <div className="flex flex-col items-center justify-center mt-24 gap-4">
           <div className="w-16 h-1 bg-zinc-100 dark:bg-zinc-900 rounded-full mb-4" />
@@ -129,7 +133,7 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
                 group relative aspect-[3/4] cursor-pointer rounded-[36px] overflow-hidden 
                 ${intro ? 'transition-transform duration-300 active-shrink' : ''}
                 ${holding === item.id ? 'scale-95' : 'hover:opacity-100'}
-                opacity-0 will-change-transform
+                opacity-0 will-change-transform backface-hidden transform-gpu
               `}
               style={{ 
                 backgroundColor: item.color ? `${item.color}33` : 'rgba(244, 244, 245, 1)',

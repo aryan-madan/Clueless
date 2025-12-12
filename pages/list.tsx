@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { Props } from '../types';
 import { Plus } from 'lucide-react';
@@ -123,14 +122,12 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
             </span>
           </div>
           
-          {native && (
-            <button 
-              onClick={onAdd}
-              className="p-2 -mr-2 text-zinc-800 dark:text-white active-shrink"
-            >
-              <Plus size={24} strokeWidth={2} />
-            </button>
-          )}
+          <button 
+            onClick={onAdd}
+            className="p-2 -mr-2 text-zinc-800 dark:text-white active-shrink"
+          >
+            <Plus size={24} strokeWidth={2} />
+          </button>
         </div>
       </header>
       
@@ -169,7 +166,6 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
                 onMouseUp={end}
                 onMouseLeave={end}
               >
-                 {/* Progress Overlay */}
                  <div 
                    className={`
                       absolute inset-0 z-0 pointer-events-none transition-transform duration-[400ms] ease-in

@@ -1,6 +1,5 @@
-
 import React, { useRef, useState, useMemo, memo } from 'react';
-import { Plus, X, Shirt, Footprints, Glasses, Watch, PackageOpen } from 'lucide-react';
+import { Plus, X, Shirt, Footprints, Glasses, Watch, PackageOpen, Palette, Wand2 } from 'lucide-react';
 import { Props, Item, Outfit } from '../types';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -13,12 +12,55 @@ const SLOTS = [
   { id: 'accessory', label: 'Accessory', icon: Watch, categories: ['Bag', 'Belt', 'Scarf', 'Accessory', 'Other'] }
 ];
 
+const hexToHsl = (hex: string) => {
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) {
+      r = parseInt("0x" + hex[1] + hex[1]);
+      g = parseInt("0x" + hex[2] + hex[2]);
+      b = parseInt("0x" + hex[3] + hex[3]);
+  } else if (hex.length === 7) {
+      r = parseInt("0x" + hex[1] + hex[2]);
+      g = parseInt("0x" + hex[3] + hex[4]);
+      b = parseInt("0x" + hex[5] + hex[6]);
+  }
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+  }
+  return [h * 360, s, l];
+};
+
+const isCompatible = (color1: string, color2: string) => {
+  const [h1, s1, l1] = hexToHsl(color1);
+  const [h2, s2, l2] = hexToHsl(color2);
+
+  const isNeutral1 = s1 < 0.15 || l1 < 0.15 || l1 > 0.85;
+  const isNeutral2 = s2 < 0.15 || l2 < 0.15 || l2 > 0.85;
+  if (isNeutral1 || isNeutral2) return true;
+
+  const diff = Math.abs(h1 - h2);
+  const hueDiff = Math.min(diff, 360 - diff);
+
+  return hueDiff < 45 || (hueDiff > 160 && hueDiff < 200) || (hueDiff > 100 && hueDiff < 140); 
+};
+
 export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }: Props) => {
   const [mode, setMode] = useState<'list' | 'create'>('list');
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const [showSuggestions, setShowSuggestions] = useState(false);
   
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
@@ -128,8 +170,30 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
     if (!data || !activeSlot) return [];
     const slotDef = SLOTS.find(s => s.id === activeSlot);
     if (!slotDef) return [];
-    return data.filter(item => slotDef.categories.includes(item.category || 'Other'));
-  }, [data, activeSlot]);
+    
+    let items = data.filter(item => slotDef.categories.includes(item.category || 'Other'));
+
+    if (showSuggestions) {
+      const otherColors = Object.entries(selections)
+        .filter(([key]) => key !== activeSlot)
+        .map(([, id]) => data.find(i => i.id === id)?.color)
+        .filter(Boolean) as string[];
+
+      if (otherColors.length > 0) {
+        items = items.filter(item => {
+          if (!item.color) return true;
+          return otherColors.some(refColor => isCompatible(item.color!, refColor));
+        });
+      }
+    }
+
+    return items;
+  }, [data, activeSlot, showSuggestions, selections]);
+
+  const hasReferenceItems = useMemo(() => {
+    if (!activeSlot) return false;
+    return Object.keys(selections).some(key => key !== activeSlot);
+  }, [selections, activeSlot]);
 
   const startPress = (id: string) => {
     isLongPress.current = false;
@@ -267,6 +331,55 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
     closeCreator();
   };
 
+  const handleAutoGenerate = () => {
+    if (!data || data.length === 0) return;
+
+    const topSlot = SLOTS.find(s => s.id === 'top');
+    const tops = data.filter(i => topSlot?.categories.includes(i.category || ''));
+    
+    if (tops.length === 0) {
+        alert("Add some tops first!");
+        return;
+    }
+
+    const randomTop = tops[Math.floor(Math.random() * tops.length)];
+    const newSelections: Record<string, string> = { 'top': randomTop.id };
+    
+    const colorsToCheck = randomTop.color ? [randomTop.color] : [];
+
+    const pickCompatible = (slotId: string) => {
+       const slotDef = SLOTS.find(s => s.id === slotId);
+       if(!slotDef) return;
+       const candidates = data.filter(i => slotDef.categories.includes(i.category || ''));
+       if(candidates.length === 0) return;
+       
+       let chosen = candidates[Math.floor(Math.random() * candidates.length)];
+       
+       if (colorsToCheck.length > 0) {
+           const compatible = candidates.filter(item => {
+               if (!item.color) return true;
+               return colorsToCheck.some(c => isCompatible(item.color!, c));
+           });
+           
+           if (compatible.length > 0) {
+               chosen = compatible[Math.floor(Math.random() * compatible.length)];
+           }
+       }
+       
+       newSelections[slotId] = chosen.id;
+       if (chosen.color) colorsToCheck.push(chosen.color);
+    };
+
+    pickCompatible('bottom');
+    pickCompatible('shoes');
+    
+    if (Math.random() > 0.6) pickCompatible('headwear');
+
+    setSelections(newSelections);
+    setEditingId(null);
+    setMode('create');
+  };
+
   const closeCreator = () => {
     if (creatorRef.current) {
       gsap.to(creatorRef.current, {
@@ -279,6 +392,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
           setSelections({});
           setEditingId(null);
           setActiveSlot(null);
+          setShowSuggestions(false);
         }
       });
     } else {
@@ -292,10 +406,14 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
             y: '100%',
             duration: 0.3,
             ease: 'power2.in',
-            onComplete: () => setActiveSlot(null)
+            onComplete: () => {
+                setActiveSlot(null);
+                setShowSuggestions(false);
+            }
         });
     } else {
         setActiveSlot(null);
+        setShowSuggestions(false);
     }
   };
 
@@ -327,17 +445,27 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
               </span>
             </div>
             
-            <button 
-              onClick={() => {
-                  setSelections({});
-                  setEditingId(null);
-                  setMode('create');
-              }}
-              className="p-2 -mr-2 text-zinc-800 dark:text-white active-shrink"
-            >
-              <Plus size={24} strokeWidth={2} />
-            </button>
-            
+            <div className="flex items-center gap-1 -mr-2">
+                {data && data.length > 2 && (
+                    <button 
+                        onClick={handleAutoGenerate}
+                        className="p-2 text-zinc-800 dark:text-white active-shrink"
+                        aria-label="Auto-generate outfit"
+                    >
+                        <Wand2 size={22} strokeWidth={2} />
+                    </button>
+                )}
+                <button 
+                  onClick={() => {
+                      setSelections({});
+                      setEditingId(null);
+                      setMode('create');
+                  }}
+                  className="p-2 text-zinc-800 dark:text-white active-shrink"
+                >
+                  <Plus size={24} strokeWidth={2} />
+                </button>
+            </div>
           </div>
         </div>
       </header>
@@ -502,16 +630,32 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
                 >
                     <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between shrink-0">
                         <span className="font-semibold text-lg">{SLOTS.find(s => s.id === activeSlot)?.label}</span>
-                        <button onClick={closeDrawer} className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-full">
-                            <X size={18} />
-                        </button>
+                        
+                        <div className="flex items-center gap-2">
+                          {hasReferenceItems && (
+                            <button 
+                                onClick={() => setShowSuggestions(!showSuggestions)}
+                                className={`
+                                  p-2 rounded-full transition-all duration-300 flex items-center gap-2
+                                  ${showSuggestions 
+                                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' 
+                                    : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800'}
+                                `}
+                            >
+                                <Palette size={18} />
+                            </button>
+                          )}
+                          <button onClick={closeDrawer} className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
+                              <X size={18} />
+                          </button>
+                        </div>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-4">
                         {currentInventory.length === 0 ? (
                              <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4">
                                 <PackageOpen size={48} strokeWidth={1} className="text-zinc-300 dark:text-zinc-700" />
-                                <p>No items in this category.</p>
+                                <p>{showSuggestions ? 'No matching items found.' : 'No items in this category.'}</p>
                              </div>
                         ) : (
                             <div className="grid grid-cols-3 gap-3">

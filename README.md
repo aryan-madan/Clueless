@@ -30,7 +30,7 @@ requires camera permissions to snap pics of your gear.
 ## install
 i don't have $99 for an apple dev account, so no app store/testflight link yet :(
 but, you can see demo gif for liquid glass!
-and you can test the app [here]](https://cluelesscloset.vercel.app/)
+and you can test the app [here](https://cluelesscloset.vercel.app/)
 or you can download the android version in releases :D
 
 ok bye bye (._.)/

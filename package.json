@@ -24,6 +24,7 @@
     "stay-liquid": "https://github.com/alistairheath/stay-liquid"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^6.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

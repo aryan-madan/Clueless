@@ -1,4 +1,4 @@
-<img src="./public/logo.png" alt= Clueless>
+<img src="./public/logo.png" alt="Clueless" style="width:100px; height:auto;">
 
 # clueless
 (yes its like the movie)

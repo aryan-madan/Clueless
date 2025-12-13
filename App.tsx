@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Nav } from './components/nav';
 import { List } from './pages/list';
@@ -6,7 +5,8 @@ import { Scan } from './pages/scan';
 import { Saved } from './pages/saved';
 import { read, del, write, getOutfits, saveOutfit, deleteOutfit } from './store';
 import { Item, Outfit, ScanResult } from './types';
-import { Device } from '@capacitor/device';   
+import { Device } from '@capacitor/device';
+import { SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { TabsBar } from 'stay-liquid';
 
 export default function App() {
@@ -86,28 +86,34 @@ export default function App() {
     const init = async () => {
       try {
         const info = await Device.getInfo();
-        if (info.platform !== 'ios') return;
-
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-        await TabsBar.configure({
-          visible: true,
-          initialId: 'wardrobe',
-          items: [
-            { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
-            { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
-          ],
-          selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
-          unselectedIconColor: '#9ca3af'
-        });
+        if (info.platform === 'android') {
+          await SystemBars.setStyle({ 
+            style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light 
+          });
+        }
 
-        setNative(true);
+        if (info.platform === 'ios') {
+          await TabsBar.configure({
+            visible: true,
+            initialId: 'wardrobe',
+            items: [
+              { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
+              { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
+            ],
+            selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
+            unselectedIconColor: '#9ca3af'
+          });
 
-        await TabsBar.addListener('selected', async ({ id }: any) => {
-          setTab(id);
-          if (id === 'saved') setNavigated(true);
-          if (id === 'wardrobe') load();
-        });
+          setNative(true);
+
+          await TabsBar.addListener('selected', async ({ id }: any) => {
+            setTab(id);
+            if (id === 'saved') setNavigated(true);
+            if (id === 'wardrobe') load();
+          });
+        }
 
       } catch (e) {
         setNative(false);

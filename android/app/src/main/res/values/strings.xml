@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clueless</string>
+    <string name="title_activity_main">Clueless</string>
+    <string name="package_name">com.aryan.clueless</string>
+    <string name="custom_url_scheme">com.aryan.clueless</string>
+</resources>

@@ -126,11 +126,17 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
              );
          }
          for(let i=1; i<items.length; i++) {
-             gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+             if (!gsap.isTweening(items[i])) {
+                gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+             }
          }
       }
       else if (currentCount === previous && currentCount > 0) {
-         gsap.set(items, { autoAlpha: 1, scale: 1, y: 0 });
+         for(let i=0; i<items.length; i++) {
+            if (!gsap.isTweening(items[i])) {
+               gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+            }
+         }
       }
       
       prevCount.current = currentCount;
@@ -489,7 +495,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
         ) : (
           <div ref={gridRef} className="px-6 grid grid-cols-2 gap-4 mt-2">
             {outfits.map(fit => (
-              <div key={fit.id} id={`fit-wrapper-${fit.id}`} className="invisible">
+              <div key={fit.id} id={`fit-wrapper-${fit.id}`} className="opacity-0">
                 <div 
                   className={`
                     group relative aspect-[3/4] bg-zinc-50 dark:bg-zinc-900 rounded-[32px] overflow-hidden cursor-pointer isolate

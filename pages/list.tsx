@@ -66,11 +66,17 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
         );
       }
       for(let i=1; i<items.length; i++) {
-        gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+        if (!gsap.isTweening(items[i])) {
+            gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+        }
       }
     }
     else if (currentCount === previous && currentCount > 0) {
-       gsap.set(items, { autoAlpha: 1, scale: 1, y: 0 });
+       for(let i=0; i<items.length; i++) {
+            if (!gsap.isTweening(items[i])) {
+                gsap.set(items[i], { autoAlpha: 1, scale: 1, y: 0 });
+            }
+       }
     }
     
     prevCount.current = currentCount;
@@ -145,7 +151,7 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
             <div 
               key={item.id} 
               id={`item-wrapper-${item.id}`}
-              className="invisible"
+              className="opacity-0"
             >
               <div 
                 className={`

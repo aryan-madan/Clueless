@@ -10,6 +10,10 @@
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       @apply antialiased transition-colors duration-300 bg-white dark:bg-black text-black dark:text-white;
     }
+
+    body.android {
+      font-family: 'Inter', sans-serif;
+    }
     
     ::-webkit-scrollbar {
       display: none;

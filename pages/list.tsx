@@ -3,11 +3,13 @@ import { Props } from '../types';
 import { Plus } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { AndroidConfirm } from '../components/ui';
 
-export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
+export const List = ({ data, onRemove, onAdd, native, dir, isAndroid }: Props) => {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [holding, setHolding] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const headerTextRef = useRef<HTMLDivElement>(null);
@@ -83,27 +85,36 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
 
   }, { scope: containerRef, dependencies: [data] });
 
+  const executeDelete = (id: string) => {
+    setDeleting(id);
+    const element = document.getElementById(`item-wrapper-${id}`);
+    if (element) {
+        gsap.to(element, { 
+        scale: 0, 
+        autoAlpha: 0, 
+        duration: 0.3, 
+        onComplete: () => {
+            if (onRemove) onRemove(id);
+            setDeleting(null);
+        }
+        });
+    }
+  };
+
   const start = (id: string) => {
     setHolding(id);
     timer.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50);
       
-      if (window.confirm('Remove item?')) {
-        setDeleting(id);
-        const element = document.getElementById(`item-wrapper-${id}`);
-        if (element) {
-          gsap.to(element, { 
-            scale: 0, 
-            autoAlpha: 0, 
-            duration: 0.3, 
-            onComplete: () => {
-               if (onRemove) onRemove(id);
-               setDeleting(null);
-            }
-          });
-        }
+      if (isAndroid) {
+          setPendingDelete(id);
+          setHolding(null);
+      } else {
+          if (window.confirm('Remove item?')) {
+            executeDelete(id);
+          }
+          setHolding(null);
       }
-      setHolding(null);
     }, 400);
   };
 
@@ -116,7 +127,7 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
   };
 
   return (
-    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black">
+    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black select-none">
       <header className="pt-16 pb-4 sticky top-0 z-20 transition-all duration-300 bg-white/80 dark:bg-black/80 backdrop-blur-2xl supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
         <div className="px-6 flex items-baseline justify-between pb-2">
           <div ref={headerTextRef} className="flex items-baseline gap-3">
@@ -151,7 +162,9 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
             <div 
               key={item.id} 
               id={`item-wrapper-${item.id}`}
-              className="opacity-0"
+              className="opacity-0 select-none"
+              style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+              onContextMenu={(e) => e.preventDefault()}
             >
               <div 
                 className={`
@@ -193,6 +206,19 @@ export const List = ({ data, onRemove, onAdd, native, dir }: Props) => {
             </div>
           ))}
         </div>
+      )}
+      
+      {isAndroid && (
+          <AndroidConfirm 
+            isOpen={!!pendingDelete}
+            title="Remove Item?"
+            description="This item will be permanently deleted from your closet."
+            onConfirm={() => {
+                if(pendingDelete) executeDelete(pendingDelete);
+                setPendingDelete(null);
+            }}
+            onCancel={() => setPendingDelete(null)}
+          />
       )}
     </div>
   );

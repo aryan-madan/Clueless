@@ -34,5 +34,6 @@ export interface Props {
   onDeleteOutfit?: (id: string) => void;
   onScanSave?: (result: ScanResult) => void; 
   native?: boolean;
+  isAndroid?: boolean;
   dir?: 'up' | 'down';
 }

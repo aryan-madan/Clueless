@@ -4,6 +4,8 @@ PODS:
   - CapacitorCordova (8.0.0)
   - CapacitorDevice (8.0.0):
     - Capacitor
+  - CapacitorHaptics (8.0.0):
+    - Capacitor
   - StayLiquid (0.1.0):
     - Capacitor (>= 6.0.0)
 
@@ -11,6 +13,7 @@ DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorDevice (from `../../node_modules/@capacitor/device`)"
+  - "CapacitorHaptics (from `../../node_modules/@capacitor/haptics`)"
   - StayLiquid (from `../../node_modules/stay-liquid`)
 
 EXTERNAL SOURCES:
@@ -20,6 +23,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorDevice:
     :path: "../../node_modules/@capacitor/device"
+  CapacitorHaptics:
+    :path: "../../node_modules/@capacitor/haptics"
   StayLiquid:
     :path: "../../node_modules/stay-liquid"
 
@@ -27,8 +32,9 @@ SPEC CHECKSUMS:
   Capacitor: 341ff7cf652ec695d1a8ebf604db448ac7b6d635
   CapacitorCordova: 5dc3912d25ef770a3fe0f431bb65c9fbfa2e92f9
   CapacitorDevice: 9a16fb36a19ff391bf75afbe3cf16f883b3b3aa0
+  CapacitorHaptics: 2079d9fa04c5a71e18663b4722323c304c58245c
   StayLiquid: dac4b6cd7761472754f97d367ba4651ca79fcd2e
 
-PODFILE CHECKSUM: 3c91d2af17f97eb11d4da793c1ef4a2f0f8d22f0
+PODFILE CHECKSUM: c775d214f9408f5a28d37d8e5ea430c53783051a
 
 COCOAPODS: 1.16.2

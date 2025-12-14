@@ -1,5 +1,8 @@
 
-import { removeBackground } from '@imgly/background-removal';
+import { removeBackground, Config } from '@imgly/background-removal';
+
+let initPromise: Promise<void> | null = null;
+
 
 const rgbToHex = (r: number, g: number, b: number) => {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
@@ -47,112 +50,180 @@ const hslToRgb = (h: number, s: number, l: number) => {
 
 const optimizeColorForUI = (r: number, g: number, b: number) => {
   const [h, s, l] = rgbToHsl(r, g, b);
-
   const newS = Math.max(s, 0.6);
-  
   const newL = 0.6; 
-  
   const [nR, nG, nB] = hslToRgb(h, newS, newL);
   return rgbToHex(nR, nG, nB);
 };
 
-export const fix = async (blob: Blob): Promise<{ blob: Blob; color: string; category: string }> => {
+const resizeImage = (blob: Blob, maxWidth: number = 1024): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                let w = img.width;
+                let h = img.height;
+                
+                if (w > maxWidth || h > maxWidth) {
+                    const ratio = Math.min(maxWidth / w, maxWidth / h);
+                    w = Math.floor(w * ratio);
+                    h = Math.floor(h * ratio);
+                }
+                
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Canvas context failed"));
+                    return;
+                }
+                
+                ctx.drawImage(img, 0, 0, w, h);
+                
+                canvas.toBlob((b) => {
+                    URL.revokeObjectURL(url);
+                    if (b) resolve(b);
+                    else reject(new Error("Canvas encoding failed"));
+                }, 'image/jpeg', 0.9);
+            } catch (e) {
+                URL.revokeObjectURL(url);
+                reject(e);
+            }
+        };
+        img.onerror = (e) => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Image load failed"));
+        };
+        img.src = url;
+    });
+};
+
+export const downloadModel = (onProgress: (percent: number) => void): Promise<void> => {
+    if (initPromise) return initPromise;
+    
+    initPromise = (async () => {
+        try {
+            console.log("Initializing Img.ly Model...");
+            const pixel = await fetch("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==").then(r => r.blob());
+            
+            await removeBackground(pixel, {
+                progress: (key: string, current: number, total: number) => {
+                    const p = Math.round((current / total) * 100);
+                    onProgress(p);
+                },
+                debug: true
+            });
+            
+            onProgress(100);
+            console.log("Model loaded.");
+        } catch (e) {
+            console.error("Failed to load model:", e);
+        }
+    })();
+    
+    return initPromise;
+};
+
+export const warmup = async () => {
+    if (!initPromise) {
+        downloadModel(() => {});
+    }
+    return initPromise;
+};
+
+export const fix = async (originalBlob: Blob): Promise<{ blob: Blob; color: string; category: string }> => {
   try {
-    const processedBlob = await removeBackground(blob, {
-       model: 'medium',
-       progress: (key, current, total) => {
-       }
+    const blob = await resizeImage(originalBlob, 1024);
+    
+    await warmup();
+
+    const transparentBlob = await removeBackground(blob, {
+         output: { format: 'image/png', quality: 0.8 },
+         progress: (key, current, total) => {}
     });
 
-    const url = URL.createObjectURL(processedBlob);
-    const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-      img.src = url;
-    });
+    const imgBitmap = await createImageBitmap(transparentBlob);
+    const w = imgBitmap.width;
+    const h = imgBitmap.height;
 
     const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) throw new Error('ctx');
+    if (!ctx) throw new Error("Ctx failed");
 
-    ctx.drawImage(img, 0, 0);
-    const data = ctx.getImageData(0, 0, img.width, img.height);
-    const pixels = data.data;
+    ctx.drawImage(imgBitmap, 0, 0);
 
-    const buckets: Record<string, { r: number, g: number, b: number, count: number }> = {};
-    const grayscale = { r:0, g:0, b:0, count:0 };
-    
-    for (let i = 0; i < pixels.length; i += 4) {
-      const alpha = pixels[i + 3];
-      if (alpha < 128) continue;
+    const pixelData = ctx.getImageData(0, 0, w, h).data;
+    const buckets: Record<string, any> = {};
 
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      const [h, s, l] = rgbToHsl(r, g, b);
+    const stride = 10;
+    for (let i = 0; i < w * h; i += stride) {
+        const r = pixelData[i * 4];
+        const g = pixelData[i * 4 + 1];
+        const b = pixelData[i * 4 + 2];
+        const a = pixelData[i * 4 + 3];
 
-      if (s < 0.15 || l < 0.15 || l > 0.85) {
-        grayscale.r += r;
-        grayscale.g += g;
-        grayscale.b += b;
-        grayscale.count++;
-      } else {
-        const bucketIndex = Math.floor(h * 18);
-        const key = `h-${bucketIndex}`;
-        
-        if (!buckets[key]) buckets[key] = { r: 0, g: 0, b: 0, count: 0 };
-        buckets[key].r += r;
-        buckets[key].g += g;
-        buckets[key].b += b;
-        buckets[key].count++;
-      }
+        if (a > 128) {
+            const [h, s, l] = rgbToHsl(r, g, b);
+            
+            if (s > 0.1 && l > 0.15 && l < 0.9) {
+                const bucket = Math.floor(h * 6);
+                const key = `h-${bucket}`;
+                if (!buckets[key]) buckets[key] = { r:0, g:0, b:0, count:0 };
+                buckets[key].r += r;
+                buckets[key].g += g;
+                buckets[key].b += b;
+                buckets[key].count++;
+            }
+        }
     }
-
-    URL.revokeObjectURL(url);
 
     let maxCount = 0;
-    let dominantColor = null;
-
-    for (const key in buckets) {
-      if (buckets[key].count > maxCount) {
-        maxCount = buckets[key].count;
-        dominantColor = buckets[key];
-      }
+    let finalHex = '#71717a';
+    let dominant = null;
+    
+    for (const k in buckets) {
+        if (buckets[k].count > maxCount) {
+            maxCount = buckets[k].count;
+            dominant = buckets[k];
+        }
     }
 
-    let finalHex = '#71717a'; 
-
-    const totalColored = Object.values(buckets).reduce((acc, v) => acc + v.count, 0);
-    const totalOpaque = totalColored + grayscale.count;
-
-    if (dominantColor && (dominantColor.count > totalOpaque * 0.05)) {
-        const avgR = Math.round(dominantColor.r / dominantColor.count);
-        const avgG = Math.round(dominantColor.g / dominantColor.count);
-        const avgB = Math.round(dominantColor.b / dominantColor.count);
-        finalHex = optimizeColorForUI(avgR, avgG, avgB);
-    } else {
-        finalHex = '#71717a';
+    if (dominant) {
+        const dr = Math.round(dominant.r / dominant.count);
+        const dg = Math.round(dominant.g / dominant.count);
+        const db = Math.round(dominant.b / dominant.count);
+        finalHex = optimizeColorForUI(dr, dg, db);
     }
 
     return { 
-      blob: processedBlob, 
-      color: finalHex,
-      category: 'Top' 
+        blob: transparentBlob, 
+        color: finalHex, 
+        category: 'Top' 
     };
 
   } catch (e) {
-    console.error('bg removal error', e);
-    return { blob, color: '#71717a', category: 'Other' };
+    console.error('AI Error Detail:', e);
+    const fallback = await resizeImage(originalBlob, 1024).catch(() => originalBlob);
+    return { blob: fallback, color: '#ef4444', category: 'Other' };
   }
 };
 
 export const base = (blob: Blob): Promise<string> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
+    reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+            resolve(reader.result);
+        } else {
+            reject(new Error("Failed to convert blob to base64"));
+        }
+    };
+    reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 };

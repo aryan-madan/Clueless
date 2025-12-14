@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, RefreshCw, ChevronDown } from 'lucide-react';
 import { Props, ScanResult } from '../types';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { fix, base } from '../utils/clean';
+import { AndroidSelect } from '../components/ui';
 
 interface ScanProps extends Props {
   file: File | null;
@@ -14,9 +14,10 @@ interface ScanProps extends Props {
 
 const CATEGORIES = ['Top', 'Bottom', 'One Piece', 'Shoe', 'Headwear', 'Accessory', 'Bag', 'Other'];
 
-export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard }) => {
+export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard, isAndroid }) => {
   const [processing, setProcessing] = useState(true);
   const [result, setResult] = useState<ScanResult>({ src: '', color: '#f4f4f5', category: 'Top' });
+  const [showAndroidSelect, setShowAndroidSelect] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -110,15 +111,22 @@ export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard }) => {
                         </span>
                         <ChevronDown size={12} className="text-black/50 dark:text-white/50" />
 
-                        <select
-                            value={result.category}
-                            onChange={(e) => updateCategory(e.target.value)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        >
-                            {CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
+                        {isAndroid ? (
+                            <button
+                                onClick={() => setShowAndroidSelect(true)}
+                                className="absolute inset-0 w-full h-full opacity-0"
+                            />
+                        ) : (
+                            <select
+                                value={result.category}
+                                onChange={(e) => updateCategory(e.target.value)}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            >
+                                {CATEGORIES.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
             </div>
@@ -139,6 +147,16 @@ export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard }) => {
                 </button>
             </div>
         </div>
+
+        {isAndroid && (
+            <AndroidSelect 
+                isOpen={showAndroidSelect}
+                options={CATEGORIES}
+                selected={result.category}
+                onSelect={updateCategory}
+                onClose={() => setShowAndroidSelect(false)}
+            />
+        )}
     </div>
   );
 };

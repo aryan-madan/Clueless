@@ -1,8 +1,10 @@
 import React, { useRef, useState, useMemo, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, X, Shirt, Footprints, Glasses, Watch, PackageOpen, Palette, Wand2 } from 'lucide-react';
 import { Props, Item, Outfit } from '../types';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { AndroidConfirm } from '../components/ui';
 
 const SLOTS = [
   { id: 'headwear', label: 'Headwear', icon: Glasses, categories: ['Headwear', 'Eyewear', 'Hat', 'Sunglasses'] },
@@ -53,7 +55,7 @@ const isCompatible = (color1: string, color2: string) => {
   return hueDiff < 45 || (hueDiff > 160 && hueDiff < 200) || (hueDiff > 100 && hueDiff < 140); 
 };
 
-export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }: Props) => {
+export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir, isAndroid }: Props) => {
   const [mode, setMode] = useState<'list' | 'create'>('list');
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   
@@ -66,6 +68,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   const isLongPress = useRef(false);
   const [holding, setHolding] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   
   const prevCount = useRef(0);
 
@@ -107,8 +110,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
             y: 0, 
             stagger: 0.05, 
             duration: 0.5, 
-            ease: 'back.out(1.2)',
-            delay: 0.05
+            ease: 'back.out(1.2)'
           }
         );
       } 
@@ -146,13 +148,15 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   useGSAP(() => {
     if (mode === 'create' && creatorRef.current) {
       gsap.set(creatorRef.current, { y: '100%', autoAlpha: 0 });
-      gsap.set('.slot-anim', { scale: 0.5, autoAlpha: 0 });
+      // We need to use querySelectorAll on the ref because scope:containerRef won't work on portal
+      const slots = creatorRef.current.querySelectorAll('.slot-anim');
+      gsap.set(slots, { scale: 0.5, autoAlpha: 0 });
 
       gsap.to(creatorRef.current, 
         { y: '0%', autoAlpha: 1, duration: 0.5, ease: 'expo.out' }
       );
 
-      gsap.to('.slot-anim', { 
+      gsap.to(slots, { 
         scale: 1, 
         autoAlpha: 1, 
         duration: 0.5, 
@@ -161,7 +165,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
         delay: 0.2
       });
     }
-  }, { scope: containerRef, dependencies: [mode] });
+  }, { dependencies: [mode] }); // Global scope for portal
 
   useGSAP(() => {
     if (activeSlot && drawerRef.current) {
@@ -170,7 +174,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
             { y: '0%', duration: 0.4, ease: 'power3.out' }
         );
     }
-  }, { scope: containerRef, dependencies: [activeSlot] });
+  }, { dependencies: [activeSlot] }); // Global scope for portal
 
   const currentInventory = useMemo(() => {
     if (!data || !activeSlot) return [];
@@ -201,6 +205,25 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
     return Object.keys(selections).some(key => key !== activeSlot);
   }, [selections, activeSlot]);
 
+  const executeDelete = (id: string) => {
+    setDeleting(id);
+    const element = document.getElementById(`fit-wrapper-${id}`);
+    if (element) {
+        gsap.to(element, {
+            scale: 0, 
+            autoAlpha: 0, 
+            duration: 0.3,
+            onComplete: () => {
+                onDeleteOutfit?.(id);
+                setDeleting(null);
+            }
+        });
+    } else {
+        onDeleteOutfit?.(id);
+        setDeleting(null);
+    }
+  };
+
   const startPress = (id: string) => {
     isLongPress.current = false;
     setHolding(id);
@@ -208,23 +231,12 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
       isLongPress.current = true;
       if (navigator.vibrate) navigator.vibrate(50);
       
-      if (window.confirm('Delete outfit?')) {
-        setDeleting(id);
-        const element = document.getElementById(`fit-wrapper-${id}`);
-        if (element) {
-          gsap.to(element, {
-             scale: 0, 
-             autoAlpha: 0, 
-             duration: 0.3,
-             onComplete: () => {
-                 onDeleteOutfit?.(id);
-                 setDeleting(null);
-             }
-          });
-        } else {
-             onDeleteOutfit?.(id);
-             setDeleting(null);
-        }
+      if (isAndroid) {
+          setPendingDelete(id);
+      } else {
+          if (window.confirm('Delete outfit?')) {
+            executeDelete(id);
+          }
       }
       setHolding(null);
     }, 400); 
@@ -437,7 +449,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
   };
 
   return (
-    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black relative overflow-hidden">
+    <div ref={containerRef} className="min-h-full pb-32 bg-white dark:bg-black relative overflow-hidden select-none">
       
       <header className="pt-16 pb-4 sticky top-0 z-20 transition-all duration-300 bg-white/80 dark:bg-black/80 backdrop-blur-2xl supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-black/60">
         <div className="px-6 flex items-baseline justify-between pb-2">
@@ -495,7 +507,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
         ) : (
           <div ref={gridRef} className="px-6 grid grid-cols-2 gap-4 mt-2">
             {outfits.map(fit => (
-              <div key={fit.id} id={`fit-wrapper-${fit.id}`} className="opacity-0">
+              <div key={fit.id} id={`fit-wrapper-${fit.id}`} className="opacity-0 select-none" style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }} onContextMenu={(e) => e.preventDefault()}>
                 <div 
                   className={`
                     group relative aspect-[3/4] bg-zinc-50 dark:bg-zinc-900 rounded-[32px] overflow-hidden cursor-pointer isolate
@@ -544,10 +556,10 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
         )}
       </div>
 
-      {mode === 'create' && (
+      {mode === 'create' && createPortal(
         <div 
           ref={creatorRef} 
-          className="fixed inset-0 z-50 bg-white dark:bg-black flex flex-col pointer-events-none"
+          className="fixed inset-0 z-[100] bg-white dark:bg-black flex flex-col pointer-events-none"
           style={{ pointerEvents: 'auto' }}
         >
            <header className="pt-16 pb-2 px-6 flex-shrink-0 z-10 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-900">
@@ -691,7 +703,20 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir }:
             )}
 
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+      {isAndroid && (
+          <AndroidConfirm 
+             isOpen={!!pendingDelete}
+             title="Delete Outfit?"
+             description="Are you sure you want to delete this outfit? This action cannot be undone."
+             onConfirm={() => {
+                 if(pendingDelete) executeDelete(pendingDelete);
+                 setPendingDelete(null);
+             }}
+             onCancel={() => setPendingDelete(null)}
+          />
       )}
     </div>
   );

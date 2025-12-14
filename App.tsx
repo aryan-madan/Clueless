@@ -1,19 +1,26 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Nav } from './components/nav';
 import { List } from './pages/list';
 import { Scan } from './pages/scan';
 import { Saved } from './pages/saved';
+import { Loader } from './components/loader';
 import { read, del, write, getOutfits, saveOutfit, deleteOutfit } from './store';
 import { Item, Outfit, ScanResult } from './types';
 import { Device } from '@capacitor/device';
 import { SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { TabsBar } from 'stay-liquid';
+import { downloadModel } from './utils/clean';
 
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  
   const [tab, setTab] = useState('wardrobe');
   const [data, list] = useState<Item[]>([]);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [native, setNative] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
   const [navigated, setNavigated] = useState(false);
   
   const [scanFile, setScanFile] = useState<File | null>(null);
@@ -22,9 +29,60 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    load();
-    if (tab === 'saved') setNavigated(true);
-  }, [tab]);
+    const init = async () => {
+
+      try {
+        const info = await Device.getInfo();
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        if (info.platform === 'android') {
+          setIsAndroid(true);
+          document.body.classList.add('android');
+          await SystemBars.setStyle({ 
+            style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light 
+          });
+        }
+
+        if (info.platform === 'ios') {
+          await TabsBar.configure({
+            visible: true,
+            initialId: 'wardrobe',
+            items: [
+              { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
+              { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
+            ],
+            selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
+            unselectedIconColor: '#9ca3af'
+          });
+
+          setNative(true);
+          await TabsBar.addListener('selected', async ({ id }: any) => {
+            setTab(id);
+            if (id === 'saved') setNavigated(true);
+            if (id === 'wardrobe') load();
+          });
+        }
+      } catch (e) {
+        setNative(false);
+      }
+      
+      await load();
+
+      try {
+          await downloadModel((p) => setProgress(p));
+      } catch(e) {
+          console.error("Model download failed", e);
+      }
+      
+      setLoading(false);
+    };
+
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && tab === 'saved') setNavigated(true);
+  }, [tab, loading]);
 
   const load = async () => {
     const [items, fits] = await Promise.all([read(), getOutfits()]);
@@ -82,46 +140,9 @@ export default function App() {
     setScanFile(null);
   };
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const info = await Device.getInfo();
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        if (info.platform === 'android') {
-          await SystemBars.setStyle({ 
-            style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light 
-          });
-        }
-
-        if (info.platform === 'ios') {
-          await TabsBar.configure({
-            visible: true,
-            initialId: 'wardrobe',
-            items: [
-              { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
-              { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
-            ],
-            selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
-            unselectedIconColor: '#9ca3af'
-          });
-
-          setNative(true);
-
-          await TabsBar.addListener('selected', async ({ id }: any) => {
-            setTab(id);
-            if (id === 'saved') setNavigated(true);
-            if (id === 'wardrobe') load();
-          });
-        }
-
-      } catch (e) {
-        setNative(false);
-      }
-    };
-
-    init();
-  }, []);
+  if (loading) {
+      return <Loader progress={progress} />;
+  }
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
@@ -132,6 +153,7 @@ export default function App() {
             onRemove={handleRemove} 
             onAdd={handleInputTrigger} 
             native={native} 
+            isAndroid={isAndroid}
             dir={navigated ? 'down' : undefined}
           />
         )}
@@ -139,10 +161,11 @@ export default function App() {
         {tab === 'saved' && (
           <Saved 
             data={data} 
-            outfits={outfits}
-            onSaveOutfit={handleSaveOutfit}
+            outfits={outfits} 
+            onSaveOutfit={handleSaveOutfit} 
             onDeleteOutfit={handleDeleteOutfit}
             dir="up"
+            isAndroid={isAndroid}
           />
         )}
         
@@ -152,6 +175,7 @@ export default function App() {
             file={scanFile}
             onDiscard={handleScanDiscard}
             onScanSave={handleScanSave}
+            isAndroid={isAndroid}
           />
         )}
       </main>

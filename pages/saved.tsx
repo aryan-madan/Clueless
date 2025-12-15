@@ -148,7 +148,6 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir, i
   useGSAP(() => {
     if (mode === 'create' && creatorRef.current) {
       gsap.set(creatorRef.current, { y: '100%', autoAlpha: 0 });
-      // We need to use querySelectorAll on the ref because scope:containerRef won't work on portal
       const slots = creatorRef.current.querySelectorAll('.slot-anim');
       gsap.set(slots, { scale: 0.5, autoAlpha: 0 });
 
@@ -165,7 +164,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir, i
         delay: 0.2
       });
     }
-  }, { dependencies: [mode] }); // Global scope for portal
+  }, { dependencies: [mode] });
 
   useGSAP(() => {
     if (activeSlot && drawerRef.current) {
@@ -174,7 +173,7 @@ export const Saved = ({ data, outfits = [], onSaveOutfit, onDeleteOutfit, dir, i
             { y: '0%', duration: 0.4, ease: 'power3.out' }
         );
     }
-  }, { dependencies: [activeSlot] }); // Global scope for portal
+  }, { dependencies: [activeSlot] }); 
 
   const currentInventory = useMemo(() => {
     if (!data || !activeSlot) return [];

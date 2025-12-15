@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, Bookmark } from 'lucide-react';
+import { LayoutGrid, Bookmark, Settings2 } from 'lucide-react';
 import { Props } from '../types';
 
 interface NavProps extends Props {
@@ -32,6 +32,19 @@ export const Nav = ({ tab, set }: NavProps) => {
           `}
         >
           <Bookmark 
+            strokeWidth={2} 
+            size={22} 
+          />
+        </button>
+
+        <button 
+          onClick={() => set && set('settings')}
+          className={`
+            relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active-shrink
+            ${tab === 'settings' ? 'bg-black/5 dark:bg-white/10 text-black dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-zinc-400 dark:text-zinc-500'}
+          `}
+        >
+          <Settings2 
             strokeWidth={2} 
             size={22} 
           />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowRight, RefreshCw, ChevronDown } from 'lucide-react';
+import { ArrowRight, RefreshCw, ChevronDown, Timer } from 'lucide-react';
 import { Props, ScanResult } from '../types';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -8,53 +8,113 @@ import { AndroidSelect } from '../components/ui';
 
 interface ScanProps extends Props {
   file: File | null;
-  onScanSave?: (result: ScanResult) => void;
+  onScanSave?: (result: ScanResult, future?: Promise<ScanResult>) => void;
   onDiscard?: () => void;
+  engine?: 'onnx' | 'imgly';
 }
 
 const CATEGORIES = ['Top', 'Bottom', 'One Piece', 'Shoe', 'Headwear', 'Accessory', 'Bag', 'Other'];
 
-export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard, isAndroid }) => {
-  const [processing, setProcessing] = useState(true);
-  const [result, setResult] = useState<ScanResult>({ src: '', color: '#f4f4f5', category: 'Top' });
+export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard, isAndroid, engine = 'onnx' }) => {
+  const [result, setResult] = useState<ScanResult>(() => ({ 
+    src: file ? URL.createObjectURL(file) : '', 
+    color: '#f4f4f5', 
+    category: 'Top' 
+  }));
+
   const [showAndroidSelect, setShowAndroidSelect] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [processTime, setProcessTime] = useState(0);
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const processedRef = useRef<string | null>(null);
+  const aiTaskRef = useRef<Promise<ScanResult> | null>(null);
 
   useEffect(() => {
-    if (file) processFile(file);
+    return () => {
+      if (result.src.startsWith('blob:')) {
+        URL.revokeObjectURL(result.src);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let interval: any;
+    if (isAiProcessing) {
+        const start = Date.now();
+        interval = setInterval(() => {
+            setProcessTime((Date.now() - start) / 1000);
+        }, 50);
+    }
+    return () => clearInterval(interval);
+  }, [isAiProcessing]);
+
+  useEffect(() => {
+    if (file) {
+        const fileKey = `${file.name}-${file.lastModified}`;
+        if (processedRef.current === fileKey) return;
+        processedRef.current = fileKey;
+        
+        setProcessTime(0);
+        setIsAiProcessing(true);
+        
+        const task = (async () => {
+             await new Promise(r => setTimeout(r, 300));
+
+             try {
+                const { blob, color } = await fix(file, engine);
+                const b64 = await base(blob);
+                return { src: b64, color, category: 'Top' }; 
+             } catch (e) {
+                console.error(e);
+                const raw = await base(file);
+                return { src: raw, color: '#f4f4f5', category: 'Other' };
+             }
+        })();
+        
+        aiTaskRef.current = task;
+
+        task.then(res => {
+             if (containerRef.current) { 
+                 setIsAiProcessing(false);
+                 setResult(prev => ({ 
+                     ...prev, 
+                     src: res.src, 
+                     color: res.color 
+                 }));
+             }
+        });
+    }
   }, [file]);
 
-  const processFile = async (f: File) => {
-    setProcessing(true);
-    try {
-      const { blob, color, category } = await fix(f);
-      const cleanBase64 = await base(blob);
-      setResult({ src: cleanBase64, color, category });
-    } catch (e) {
-      console.error(e);
-      const b64 = await base(f);
-      setResult({ src: b64, color: '#f4f4f5', category: 'Other' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   useGSAP(() => {
-    if (!processing && containerRef.current) {
+    if (containerRef.current) {
         gsap.fromTo(containerRef.current,
             { y: '100%' },
             { y: '0%', duration: 0.5, ease: 'expo.out' }
         );
     }
-  }, [processing]);
+  }, []); 
 
   const handleSave = () => {
     if (!containerRef.current) return;
+    
     gsap.to(containerRef.current, {
       x: '100%',
       duration: 0.4,
       ease: 'power3.in',
-      onComplete: () => onScanSave?.(result)
+      onComplete: async () => {
+         let finalResult = result;
+         if (result.src.startsWith('blob:') && file) {
+             try {
+                 const b64 = await base(file);
+                 finalResult = { ...result, src: b64 };
+             } catch(e) {
+                 console.error(e);
+             }
+         }
+         onScanSave?.(finalResult, isAiProcessing ? aiTaskRef.current : undefined);
+      }
     });
   };
 
@@ -72,13 +132,7 @@ export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard, isAndro
     setResult(prev => ({ ...prev, category: cat }));
   };
 
-  if (processing) {
-     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-             <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-        </div>
-     );
-  }
+  if (!result.src) return null;
 
   return (
     <div 
@@ -94,19 +148,32 @@ export const Scan: React.FC<ScanProps> = ({ file, onScanSave, onDiscard, isAndro
 
         <div className="flex-1 w-full flex flex-col items-center justify-center px-6 gap-4 pb-12">
             <div 
-                className="relative w-full aspect-[4/5] max-h-[50vh] flex items-center justify-center rounded-[32px] overflow-hidden shadow-inner transition-colors duration-500"
+                className="relative w-full aspect-[4/5] max-h-[50vh] flex items-center justify-center rounded-[32px] overflow-hidden shadow-inner transition-colors duration-1000"
                 style={{ backgroundColor: result.color ? `${result.color}33` : 'rgba(244,244,245,0.5)' }}
             >
                 <img 
                     src={result.src} 
-                    className="w-full h-full object-contain p-8 select-none"
+                    className={`
+                        w-full h-full object-contain p-8 select-none transition-all duration-500
+                        ${isAiProcessing ? 'animate-pulse opacity-80' : 'opacity-100'}
+                    `}
                     alt="preview" 
                     draggable={false}
                 />
+
+                {(isAiProcessing || processTime > 0) && (
+                     <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 px-3 py-2 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md rounded-xl shadow-sm border border-black/5 dark:border-white/5 h-10 transition-all">
+                        <Timer size={14} className={`text-zinc-500 ${isAiProcessing ? 'animate-spin' : ''}`} />
+                        <span className="text-xs font-bold text-black dark:text-white tabular-nums">
+                            {processTime.toFixed(1)}s
+                        </span>
+                    </div>
+                )}
                 
-                <div className="absolute bottom-4 right-4 z-20">
-                    <div className="relative flex items-center gap-2 px-3 py-2 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md rounded-xl shadow-sm border border-black/5 dark:border-white/5 transition-transform active:scale-95">
-                        <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wide">
+                <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
+                    
+                    <div className="relative flex items-center gap-2 px-3 py-2 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md rounded-xl shadow-sm border border-black/5 dark:border-white/5 transition-transform active:scale-95 h-10">
+                        <span className="text-xs font-bold text-black dark:text-white uppercase tracking-wide truncate max-w-[80px]">
                            {result.category}
                         </span>
                         <ChevronDown size={12} className="text-black/50 dark:text-white/50" />

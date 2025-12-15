@@ -32,7 +32,7 @@ export interface Props {
   onRemove?: (id: string) => void;
   onSaveOutfit?: (outfit: Outfit) => void;
   onDeleteOutfit?: (id: string) => void;
-  onScanSave?: (result: ScanResult) => void; 
+  onScanSave?: (result: ScanResult, future?: Promise<ScanResult>) => void; 
   native?: boolean;
   isAndroid?: boolean;
   dir?: 'up' | 'down';

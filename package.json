@@ -22,6 +22,7 @@
     "@imgly/background-removal": "^1.7.0",
     "gsap": "^3.13.0",
     "lucide-react": "^0.344.0",
+    "onnxruntime-web": "^1.21.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "stay-liquid": "https://github.com/alistairheath/stay-liquid",

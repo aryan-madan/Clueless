@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Nav } from './components/nav';
 import { List } from './pages/list';
 import { Scan } from './pages/scan';
 import { Saved } from './pages/saved';
+import { Settings } from './pages/settings';
 import { Loader } from './components/loader';
 import { read, del, write, getOutfits, saveOutfit, deleteOutfit } from './store';
 import { Item, Outfit, ScanResult } from './types';
@@ -22,6 +22,7 @@ export default function App() {
   const [native, setNative] = useState(false);
   const [isAndroid, setIsAndroid] = useState(false);
   const [navigated, setNavigated] = useState(false);
+  const [engine, setEngine] = useState<'onnx' | 'imgly'>('onnx');
   
   const [scanFile, setScanFile] = useState<File | null>(null);
   const [scanKey, setScanKey] = useState(0);
@@ -30,10 +31,15 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
-
       try {
         const info = await Device.getInfo();
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        // Restore engine preference
+        const savedEngine = localStorage.getItem('clueless-engine');
+        if (savedEngine === 'imgly' || savedEngine === 'onnx') {
+            setEngine(savedEngine);
+        }
 
         if (info.platform === 'android') {
           setIsAndroid(true);
@@ -50,6 +56,7 @@ export default function App() {
             items: [
               { id: 'wardrobe', title: 'Closet', systemIcon: 'tshirt' },
               { id: 'saved', title: 'Saved', systemIcon: 'bookmark' },
+              { id: 'settings', title: 'Settings', systemIcon: 'gear' },
             ],
             selectedIconColor: isDark ? '#FFFFFF' : '#000000', 
             unselectedIconColor: '#9ca3af'
@@ -83,6 +90,11 @@ export default function App() {
   useEffect(() => {
     if (!loading && tab === 'saved') setNavigated(true);
   }, [tab, loading]);
+
+  const updateEngine = (newEngine: 'onnx' | 'imgly') => {
+      setEngine(newEngine);
+      localStorage.setItem('clueless-engine', newEngine);
+  };
 
   const load = async () => {
     const [items, fits] = await Promise.all([read(), getOutfits()]);
@@ -120,11 +132,12 @@ export default function App() {
     }
   };
 
-  const handleScanSave = async (result: ScanResult) => {
+  const handleScanSave = async (result: ScanResult, future?: Promise<ScanResult>) => {
     setScanFile(null);
 
+    const id = crypto.randomUUID();
     const newItem: Item = {
-      id: crypto.randomUUID(),
+      id,
       src: result.src,
       category: result.category,
       color: result.color,
@@ -132,20 +145,33 @@ export default function App() {
     };
 
     list(prev => [newItem, ...prev]);
-
     await write(newItem);
+
+    if (future) {
+        try {
+            const better = await future;
+            const updatedItem: Item = {
+                ...newItem,
+                src: better.src,
+                color: better.color,
+            };
+            
+            list(prev => prev.map(i => i.id === id ? updatedItem : i));
+            await write(updatedItem);
+        } catch (e) {
+            console.error("Background processing failed", e);
+        }
+    }
   };
 
   const handleScanDiscard = () => {
     setScanFile(null);
   };
 
-  if (loading) {
-      return <Loader progress={progress} />;
-  }
-
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-white dark:bg-black text-black dark:text-white overflow-hidden">
+      <Loader progress={progress} />
+      
       <main className="flex-1 relative z-10 h-full overflow-y-auto scroll-smooth no-scrollbar">
         {tab === 'wardrobe' && (
           <List 
@@ -168,6 +194,10 @@ export default function App() {
             isAndroid={isAndroid}
           />
         )}
+
+        {tab === 'settings' && (
+            <Settings engine={engine} setEngine={updateEngine} />
+        )}
         
         {scanFile && (
           <Scan 
@@ -176,6 +206,7 @@ export default function App() {
             onDiscard={handleScanDiscard}
             onScanSave={handleScanSave}
             isAndroid={isAndroid}
+            engine={engine}
           />
         )}
       </main>

@@ -7,10 +7,10 @@
 a minimal and clean wardrobe manager to digitize your closet, and help decide what to wear
 
 ## demo
-![Demo](public/demo.gif)
+![Demo](public/demo-updated.gif)
 
 ## features
-- background removal is completely local. no cloud uploads
+- background removal is completely local. no cloud uploads, option between medium and high quality
 - while building an outfit, the app suggests items from your closet that match based on real color theory (complementary, analogous, etc)
 - tap the wand to auto-generate an outfit from your inventory
 - visualize your fits with a layered canvas interface
@@ -21,11 +21,8 @@ a minimal and clean wardrobe manager to digitize your closet, and help decide wh
 - tailwind css
 - gsap (animations)
 - @imgly/background-removal (wasm based ai)
+- onnxruntime-web
 - capacitor (ios/android)
-
-## usage
-it works as a website or a native app.
-requires camera permissions to snap pics of your gear.
 
 ## install
 i don't have $99 for an apple dev account, so no app store/testflight link yet :(

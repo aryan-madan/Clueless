@@ -1,0 +1,6 @@
+.vercel
+android/
+assets/
+dist/
+ios/
+node_modules/
